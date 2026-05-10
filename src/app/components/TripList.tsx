@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from "motion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { tripsApi, type TripSummaryDTO } from "../../lib/api";
 import { qk } from "../../lib/queryKeys";
-import { CurrentUserChip } from "./CurrentUserChip";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -235,22 +234,6 @@ export default function TripList() {
   const activeTrips = trips.filter((t) => t.phase !== "complete");
   const pastTrips = trips.filter((t) => t.phase === "complete");
 
-  // Unique set of people across every trip — used to populate the user
-  // switcher chip so you can impersonate any known member from the home
-  // screen. Keeps the chip useful before you open a specific trip.
-  const knownMembers = React.useMemo(() => {
-    const seen = new Map<string, { id?: string; name: string }>();
-    for (const t of trips) {
-      for (const m of t.memberPreview) {
-        if (!seen.has(m.name)) seen.set(m.name, { id: m.id, name: m.name });
-      }
-    }
-    // Always surface "Sarah" so the prototype has a sane default even before
-    // any trips load (ex: cold first render).
-    if (!seen.has("Sarah")) seen.set("Sarah", { name: "Sarah" });
-    return [...seen.values()];
-  }, [trips]);
-
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden bg-[#F7F7F5] no-scrollbar">
       {/* Header */}
@@ -271,9 +254,6 @@ export default function TripList() {
             >
               Your Trips
             </motion.h1>
-          </div>
-          <div className="pt-2">
-            <CurrentUserChip members={knownMembers} />
           </div>
         </div>
       </div>

@@ -16,7 +16,6 @@ import React from "react";
 import { AddExpenseSheet, YOU, AVATAR_COLORS, type ExpenseSavePayload } from "./AddExpenseSheet";
 import { useTripData, type Expense } from "./TripDataContext";
 import { useCurrentUser } from "../../lib/currentUser";
-import { CurrentUserChip } from "./CurrentUserChip";
 import { MoneyScreenSkeleton } from "./Skeletons";
 import { saveReceiptPhoto, getReceiptPhoto } from "../../lib/receiptPhotos";
 
@@ -356,7 +355,6 @@ export default function MoneyScreen() {
           >
             <ArrowLeft className="size-5 text-[#007AFF]" />
           </Link>
-          <CurrentUserChip members={trip.participants} />
         </div>
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
           <h1 className="text-[28px] font-semibold text-[#1C1C1E] tracking-tight leading-tight">
