@@ -17,7 +17,7 @@ export type {
   RSVPStatus, TripPhase, BudgetCategoryDTO, TripRuleDTO, DepositPolicyDTO,
 };
 
-const API_BASE = "/api";
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
