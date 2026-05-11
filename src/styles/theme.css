@@ -240,3 +240,24 @@
 .iphone-mockup-screen *::-webkit-scrollbar {
   display: none;
 }
+
+/* ─── Native time/date inputs ────────────────────────────────────────────── */
+/* Hide the browser's built-in clock/calendar picker indicator so our time
+   fields show only the time text. The input is still clickable to open
+   the picker on supported browsers. */
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="date"]::-webkit-calendar-picker-indicator {
+  display: none;
+  -webkit-appearance: none;
+  opacity: 0;
+}
+input[type="time"]::-webkit-inner-spin-button,
+input[type="time"]::-webkit-clear-button {
+  display: none;
+  -webkit-appearance: none;
+}
+/* Firefox + general appearance reset for time inputs to drop the icon. */
+input[type="time"] {
+  -moz-appearance: textfield;
+  appearance: none;
+}
