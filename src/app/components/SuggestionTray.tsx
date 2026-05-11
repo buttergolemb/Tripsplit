@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { MapPin, Clock, AlignLeft, Search, Sparkles, Check } from "lucide-react";
+import { MapPin, AlignLeft, Search, Sparkles, Check } from "lucide-react";
 import { BottomSheet } from "./BottomSheet";
 import { HorizontalDragScroll } from "./HorizontalDragScroll";
 import type { Suggestion } from "./timeline/types";
@@ -261,13 +261,12 @@ export function SuggestionTray({
               )}
             </label>
             <div className="relative">
-              <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-[#C7C7CC] size-4 pointer-events-none" />
               <input
                 ref={timeRef}
                 type="time"
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
-                className={`w-full bg-[#F7F7F5] rounded-[14px] pl-11 pr-4 py-3 text-[15px] text-[#1C1C1E] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20 transition-all ${
+                className={`w-full bg-[#F7F7F5] rounded-[14px] pl-4 pr-4 py-3 text-[15px] text-[#1C1C1E] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20 transition-all ${
                   !startTime && autofilled ? "ring-2 ring-[#FF9F0A]/30" : ""
                 }`}
               />
@@ -280,12 +279,11 @@ export function SuggestionTray({
               End Time
             </label>
             <div className="relative">
-              <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-[#C7C7CC] size-4 pointer-events-none" />
               <input
                 type="time"
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
-                className={`w-full bg-[#F7F7F5] rounded-[14px] pl-11 pr-4 py-3 text-[15px] text-[#1C1C1E] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20 transition-all ${
+                className={`w-full bg-[#F7F7F5] rounded-[14px] pl-4 pr-4 py-3 text-[15px] text-[#1C1C1E] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20 transition-all ${
                   !endTime && autofilled ? "ring-2 ring-[#FF9F0A]/30" : ""
                 }`}
               />

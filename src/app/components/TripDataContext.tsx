@@ -459,39 +459,192 @@ export function TripDataProvider({ tripId, children }: { tripId: string; childre
 
   const addDayMut = useMutation({
     mutationFn: (input: Parameters<typeof timelineApi.addDay>[1]) => timelineApi.addDay(tripId, input),
-    onSuccess: invalidateTrip,
-    onError: (err) => toastError("add day", err),
+    onMutate: async (input) => {
+      await qc.cancelQueries({ queryKey: qk.trip(tripId) });
+      const previous = qc.getQueryData<TripDTO>(qk.trip(tripId));
+      const tempDay: DayScheduleDTO = {
+        id: input.id ?? `temp-day-${Date.now().toString(36)}`,
+        dayNumber: input.dayNumber,
+        date: input.date ?? null,
+        label: input.label ?? null,
+        dayStartTime: input.dayStartTime ?? null,
+        dayEndTime: input.dayEndTime ?? null,
+        events: [],
+        suggestions: [],
+      };
+      patchCachedTrip((draft) => ({
+        ...draft,
+        timeline: [...draft.timeline, tempDay].sort((a, b) => a.dayNumber - b.dayNumber),
+      }));
+      return { previous };
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(qk.trip(tripId), context.previous);
+      toastError("add day", err);
+    },
+    onSettled: invalidateTrip,
   });
   const addEventMut = useMutation({
     mutationFn: (input: Parameters<typeof timelineApi.addEvent>[1]) => timelineApi.addEvent(tripId, input),
-    onSuccess: invalidateTrip,
-    onError: (err) => toastError("add event", err),
+    onMutate: async (input) => {
+      await qc.cancelQueries({ queryKey: qk.trip(tripId) });
+      const previous = qc.getQueryData<TripDTO>(qk.trip(tripId));
+      const tempEvent: TimelineEventDTO = {
+        id: input.id ?? `temp-evt-${Date.now().toString(36)}`,
+        dayId: input.dayId,
+        title: input.title,
+        time: input.time ?? null,
+        endTime: input.endTime ?? null,
+        location: input.location ?? null,
+        emoji: input.emoji ?? null,
+        state: input.state ?? "proposed",
+        votesFor: 0,
+        votesAgainst: 0,
+        votingCloses: input.votingCloses ?? null,
+        attendees: (input.attendees ?? []).map((a) => {
+          const name =
+            trip.participants.find((p) => p.id === a.memberId)?.name ?? "You";
+          return { memberId: a.memberId, name, status: a.status ?? "going" };
+        }),
+      };
+      patchCachedTrip((draft) => ({
+        ...draft,
+        timeline: draft.timeline.map((d) =>
+          d.id === input.dayId ? { ...d, events: [...d.events, tempEvent] } : d
+        ),
+      }));
+      return { previous };
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(qk.trip(tripId), context.previous);
+      toastError("add event", err);
+    },
+    onSettled: invalidateTrip,
   });
   const updateEventMut = useMutation({
     mutationFn: (input: { eventId: string; patch: Parameters<typeof timelineApi.updateEvent>[2] }) =>
       timelineApi.updateEvent(tripId, input.eventId, input.patch),
-    onSuccess: invalidateTrip,
-    onError: (err) => toastError("update event", err),
+    onMutate: async ({ eventId, patch }) => {
+      await qc.cancelQueries({ queryKey: qk.trip(tripId) });
+      const previous = qc.getQueryData<TripDTO>(qk.trip(tripId));
+      patchCachedTrip((draft) => ({
+        ...draft,
+        timeline: draft.timeline.map((d) => ({
+          ...d,
+          events: d.events.map((e) =>
+            e.id === eventId
+              ? {
+                  ...e,
+                  title: patch.title ?? e.title,
+                  time: patch.time === undefined ? e.time : patch.time,
+                  endTime: patch.endTime === undefined ? e.endTime : patch.endTime,
+                  location: patch.location === undefined ? e.location : patch.location,
+                  emoji: patch.emoji === undefined ? e.emoji : patch.emoji,
+                  state: patch.state ?? e.state,
+                  votingCloses:
+                    patch.votingCloses === undefined ? e.votingCloses : patch.votingCloses,
+                }
+              : e
+          ),
+        })),
+      }));
+      return { previous };
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(qk.trip(tripId), context.previous);
+      toastError("update event", err);
+    },
+    onSettled: invalidateTrip,
   });
   const removeEventMut = useMutation({
     mutationFn: (eventId: string) => timelineApi.removeEvent(tripId, eventId),
+    onMutate: async (eventId) => {
+      await qc.cancelQueries({ queryKey: qk.trip(tripId) });
+      const previous = qc.getQueryData<TripDTO>(qk.trip(tripId));
+      patchCachedTrip((draft) => ({
+        ...draft,
+        timeline: draft.timeline.map((d) => ({
+          ...d,
+          events: d.events.filter((e) => e.id !== eventId),
+        })),
+      }));
+      return { previous };
+    },
     onSuccess: () => {
-      invalidateTrip();
       toast.push({ tone: "success", title: "Event removed" });
     },
-    onError: (err) => toastError("remove event", err),
+    onError: (err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(qk.trip(tripId), context.previous);
+      toastError("remove event", err);
+    },
+    onSettled: invalidateTrip,
   });
   const voteMut = useMutation({
     mutationFn: (input: { eventId: string; type: "for" | "against" }) =>
       timelineApi.vote(tripId, input.eventId, input.type),
-    onSuccess: invalidateTrip,
-    onError: (err) => toastError("record vote", err),
+    onMutate: async ({ eventId, type }) => {
+      await qc.cancelQueries({ queryKey: qk.trip(tripId) });
+      const previous = qc.getQueryData<TripDTO>(qk.trip(tripId));
+      patchCachedTrip((draft) => ({
+        ...draft,
+        timeline: draft.timeline.map((d) => ({
+          ...d,
+          events: d.events.map((e) =>
+            e.id === eventId
+              ? {
+                  ...e,
+                  votesFor: (e.votesFor ?? 0) + (type === "for" ? 1 : 0),
+                  votesAgainst: (e.votesAgainst ?? 0) + (type === "against" ? 1 : 0),
+                }
+              : e
+          ),
+        })),
+      }));
+      return { previous };
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(qk.trip(tripId), context.previous);
+      toastError("record vote", err);
+    },
+    onSettled: invalidateTrip,
   });
   const attendanceMut = useMutation({
     mutationFn: (input: { eventId: string; memberId: string; status: "going" | "maybe" | "declined" }) =>
       timelineApi.setAttendance(tripId, input.eventId, input.memberId, input.status),
-    onSuccess: invalidateTrip,
-    onError: (err) => toastError("update RSVP", err),
+    onMutate: async ({ eventId, memberId, status }) => {
+      await qc.cancelQueries({ queryKey: qk.trip(tripId) });
+      const previous = qc.getQueryData<TripDTO>(qk.trip(tripId));
+      const memberName =
+        trip.participants.find((p) => p.id === memberId)?.name ?? "You";
+      patchCachedTrip((draft) => ({
+        ...draft,
+        timeline: draft.timeline.map((d) => ({
+          ...d,
+          events: d.events.map((e) => {
+            if (e.id !== eventId) return e;
+            const existing = e.attendees.find((a) => a.memberId === memberId);
+            if (existing) {
+              return {
+                ...e,
+                attendees: e.attendees.map((a) =>
+                  a.memberId === memberId ? { ...a, status } : a
+                ),
+              };
+            }
+            return {
+              ...e,
+              attendees: [...e.attendees, { memberId, name: memberName, status }],
+            };
+          }),
+        })),
+      }));
+      return { previous };
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(qk.trip(tripId), context.previous);
+      toastError("update RSVP", err);
+    },
+    onSettled: invalidateTrip,
   });
 
   const updateTripMut = useMutation({

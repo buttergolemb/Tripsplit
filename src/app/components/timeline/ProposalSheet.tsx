@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapPin, Clock, AlignLeft, Search } from 'lucide-react';
+import { MapPin, AlignLeft, Search } from 'lucide-react';
 import { BottomSheet } from '../BottomSheet';
 import { HorizontalDragScroll } from '../HorizontalDragScroll';
 
@@ -105,24 +105,22 @@ export function ProposalSheet({ isOpen, onClose, dayLabel, onSubmit }: ProposalS
             </label>
             <div className="flex gap-3">
               <div className="flex-1 relative">
-                <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-[#C7C7CC] size-4 pointer-events-none" />
                 <input
                   type="time"
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
-                  className="w-full bg-[#F7F7F5] rounded-[14px] pl-11 pr-4 py-3 text-[15px] text-[#1C1C1E] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20"
+                  className="w-full bg-[#F7F7F5] rounded-[14px] pl-4 pr-4 py-3 text-[15px] text-[#1C1C1E] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20"
                   placeholder="Start"
                 />
                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-[#C7C7CC] uppercase pointer-events-none">Start</span>
               </div>
               <div className="flex items-center text-[#C7C7CC] font-medium text-[13px]">–</div>
               <div className="flex-1 relative">
-                <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-[#C7C7CC] size-4 pointer-events-none" />
                 <input
                   type="time"
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
-                  className="w-full bg-[#F7F7F5] rounded-[14px] pl-11 pr-4 py-3 text-[15px] text-[#1C1C1E] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20"
+                  className="w-full bg-[#F7F7F5] rounded-[14px] pl-4 pr-4 py-3 text-[15px] text-[#1C1C1E] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20"
                   placeholder="End"
                 />
                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-[#C7C7CC] uppercase pointer-events-none">End</span>
