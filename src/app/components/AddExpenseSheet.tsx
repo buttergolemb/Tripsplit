@@ -14,6 +14,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { useCurrentUser } from "../../lib/currentUser";
 import { formatExpenseDateLabelFromISO, formatExpenseWhenChipFromISO, todayISODate } from "../../lib/expenseDate";
 import receiptPottoImg from "../../assets/receipt-potto.png";
+import { rememberAssignment, suggestAssignment } from "../../lib/itemAssignmentMemory";
 
 // Only allow digits and a single decimal point (max 2 fraction digits).
 function sanitizeMoneyInput(raw: string): string {
@@ -443,6 +444,7 @@ function LineItemSplitView({
   setAssignments,
   onContinue,
   onBack,
+  showSuggestionHint = false,
 }: {
   receipt: SampleReceipt;
   participants: string[];
@@ -451,6 +453,7 @@ function LineItemSplitView({
   setAssignments: (next: Record<number, string[]>) => void;
   onContinue: () => void;
   onBack: () => void;
+  showSuggestionHint?: boolean;
 }) {
   const [openItem, setOpenItem] = React.useState<number | null>(null);
 
@@ -684,6 +687,19 @@ function LineItemSplitView({
           })}
         </div>
       </div>
+
+      {/* Auto-suggest hint */}
+      {showSuggestionHint && (
+        <div className="flex items-start gap-2.5 bg-[#F1EEFF] rounded-[12px] p-3 mb-3">
+          <Sparkles className="size-4 text-[#8E8EFA] mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="text-[12px] font-semibold text-[#1C1C1E]">Smart suggestions applied</p>
+            <p className="text-[11px] text-[#6E6E73] leading-snug mt-0.5">
+              We pre-filled assignments based on past splits. Tap any item to adjust.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="flex items-baseline justify-between mb-2">
         <p className="text-[12px] font-semibold text-[#8E8E93] uppercase tracking-[0.6px]">Assign each item</p>
@@ -1006,9 +1022,27 @@ export function AddExpenseSheet({
   const [itemAssignments, setItemAssignments] = React.useState<Record<number, string[]>>({});
   const [scannedBadge, setScannedBadge] = React.useState(false);
 
+  const [usedSuggestions, setUsedSuggestions] = React.useState(false);
+
   const openCamera = () => {
     setScanningReceipt(DEFAULT_RECEIPT);
-    setItemAssignments({});
+
+    // Pre-fill assignments from past trips using item-name memory.
+    // Only fills items where we have a usable suggestion; others stay blank.
+    const presets: Record<number, string[]> = {};
+    let hits = 0;
+    if (tripId) {
+      DEFAULT_RECEIPT.items.forEach((item, idx) => {
+        if (isTaxOrTip(item.name)) return;
+        const suggested = suggestAssignment(tripId, item.name, participants);
+        if (suggested && suggested.length > 0) {
+          presets[idx] = suggested;
+          hits++;
+        }
+      });
+    }
+    setItemAssignments(presets);
+    setUsedSuggestions(hits > 0);
     setScanView("camera");
   };
 
@@ -1017,6 +1051,17 @@ export function AddExpenseSheet({
     const receipt = scanningReceipt;
     if (!receipt) return;
     const shares = computePerMemberShares(receipt, itemAssignments, participants);
+
+    // Remember each non-tax/tip assignment for next time.
+    if (tripId) {
+      receipt.items.forEach((item, idx) => {
+        if (isTaxOrTip(item.name)) return;
+        const members = itemAssignments[idx] ?? [];
+        if (members.length > 0) {
+          rememberAssignment(tripId, item.name, members);
+        }
+      });
+    }
 
     setAmount(receipt.total.toFixed(2));
     setDescription(receipt.description);
@@ -1212,6 +1257,7 @@ export function AddExpenseSheet({
               setAssignments={setItemAssignments}
               onContinue={applyItemSplit}
               onBack={() => setScanView("camera")}
+              showSuggestionHint={usedSuggestions}
             />
           )}
         </AnimatePresence>

@@ -13,7 +13,6 @@ import {
   budgetApi, rulesApi, depositPolicyApi,
   type TripDTO, type ExpenseDTO, type DayScheduleDTO,
   type BudgetCategoryDTO, type TripRuleDTO, type DepositPolicyDTO,
-  type TimelineEventDTO, type EventState, type AttendanceStatus,
 } from "../../lib/api";
 import { qk } from "../../lib/queryKeys";
 import type { DaySchedule, Event, Suggestion } from "./timeline/types";
@@ -295,6 +294,17 @@ export function TripDataProvider({ tripId, children }: { tripId: string; childre
     return tripQuery.data ? tripFromDTO(tripQuery.data) : emptyTrip(tripId);
   }, [tripQuery.data, tripId]);
 
+  // Keep a lookup of dayNumber → real dayId from the server so event mutations
+  // target the right day regardless of whether the seed assigned a stable id
+  // or a fresh day was just created via addDay.
+  const dayIdByNumber = React.useMemo(() => {
+    const m = new Map<number, string>();
+    if (tripQuery.data) {
+      for (const d of tripQuery.data.timeline) m.set(d.dayNumber, d.id);
+    }
+    return m;
+  }, [tripQuery.data]);
+
   const invalidateTrip = React.useCallback(() => {
     qc.invalidateQueries({ queryKey: qk.trip(tripId) });
     qc.invalidateQueries({ queryKey: qk.balances(tripId) });
@@ -467,63 +477,21 @@ export function TripDataProvider({ tripId, children }: { tripId: string; childre
         ...draft,
         timeline: [...draft.timeline, tempDay].sort((a, b) => a.dayNumber - b.dayNumber),
       }));
-      const optimisticDayId = tempDay.id;
-      return { previous, optimisticDayId };
-    },
-    onSuccess: (serverDay, _vars, context) => {
-      if (context?.optimisticDayId) {
-        patchCachedTrip((draft) => ({
-          ...draft,
-          timeline: draft.timeline.map((d) =>
-            d.id === context.optimisticDayId ? serverDay : d
-          ),
-        }));
-      }
+      return { previous };
     },
     onError: (err, _vars, context) => {
       if (context?.previous) qc.setQueryData(qk.trip(tripId), context.previous);
       toastError("add day", err);
     },
-    onSettled: invalidateTrip,
   });
-
-  type AddEventInput = {
-    dayNumber: number;
-    id?: string;
-    title: string;
-    time?: string | null;
-    endTime?: string | null;
-    location?: string | null;
-    emoji?: string | null;
-    state?: EventState;
-    votingCloses?: string | null;
-    attendees?: { memberId: string; status?: AttendanceStatus }[];
-  };
-
   const addEventMut = useMutation({
-    mutationFn: (input: AddEventInput) => {
-      const cached = qc.getQueryData<TripDTO>(qk.trip(tripId));
-      const dayRow = cached?.timeline.find((d) => d.dayNumber === input.dayNumber);
-      const dayId = dayRow?.id;
-      if (!dayId || dayId.startsWith("temp-")) {
-        throw new Error("This day is still saving. Try again in a moment.");
-      }
-      const { dayNumber: _n, ...payload } = input;
-      return timelineApi.addEvent(tripId, { ...payload, dayId });
-    },
+    mutationFn: (input: Parameters<typeof timelineApi.addEvent>[1]) => timelineApi.addEvent(tripId, input),
     onMutate: async (input) => {
       await qc.cancelQueries({ queryKey: qk.trip(tripId) });
-      const cached = qc.getQueryData<TripDTO>(qk.trip(tripId));
-      const dayRow = cached?.timeline.find((d) => d.dayNumber === input.dayNumber);
-      const dayId = dayRow?.id;
-      if (!dayId || dayId.startsWith("temp-")) {
-        throw new Error("This day is still saving. Try again in a moment.");
-      }
-      const previous = cached;
-      const tempEventId = input.id ?? `temp-evt-${Date.now().toString(36)}`;
+      const previous = qc.getQueryData<TripDTO>(qk.trip(tripId));
       const tempEvent: TimelineEventDTO = {
-        id: tempEventId,
-        dayId,
+        id: input.id ?? `temp-evt-${Date.now().toString(36)}`,
+        dayId: input.dayId,
         title: input.title,
         time: input.time ?? null,
         endTime: input.endTime ?? null,
@@ -542,33 +510,15 @@ export function TripDataProvider({ tripId, children }: { tripId: string; childre
       patchCachedTrip((draft) => ({
         ...draft,
         timeline: draft.timeline.map((d) =>
-          d.id === dayId ? { ...d, events: [...d.events, tempEvent] } : d
+          d.id === input.dayId ? { ...d, events: [...d.events, tempEvent] } : d
         ),
       }));
-      return { previous, tempEventId, dayId };
-    },
-    onSuccess: (serverEvent, _vars, context) => {
-      if (context?.tempEventId && context?.dayId) {
-        patchCachedTrip((draft) => ({
-          ...draft,
-          timeline: draft.timeline.map((d) =>
-            d.id === context.dayId
-              ? {
-                  ...d,
-                  events: d.events.map((e) =>
-                    e.id === context.tempEventId ? serverEvent : e
-                  ),
-                }
-              : d
-          ),
-        }));
-      }
+      return { previous };
     },
     onError: (err, _vars, context) => {
       if (context?.previous) qc.setQueryData(qk.trip(tripId), context.previous);
       toastError("add event", err);
     },
-    onSettled: invalidateTrip,
   });
   const updateEventMut = useMutation({
     mutationFn: (input: { eventId: string; patch: Parameters<typeof timelineApi.updateEvent>[2] }) =>
@@ -835,6 +785,8 @@ export function TripDataProvider({ tripId, children }: { tripId: string; childre
     }),
 
     addEventToDay: (dayNumber, event) => {
+      const dayId = dayIdByNumber.get(dayNumber);
+      if (!dayId) return;
       const attendees = (event.attendees ?? []).flatMap((a) => {
         const memberId = nameToId(a.name);
         return memberId ? [{
@@ -842,13 +794,9 @@ export function TripDataProvider({ tripId, children }: { tripId: string; childre
         }] : [];
       });
       addEventMut.mutate({
-        dayNumber,
-        title: event.title,
-        time: event.time ?? null,
-        endTime: event.endTime ?? null,
-        location: event.location ?? null,
-        emoji: event.emoji ?? null,
-        state: event.state,
+        dayId, title: event.title, time: event.time ?? null,
+        endTime: event.endTime ?? null, location: event.location ?? null,
+        emoji: event.emoji ?? null, state: event.state,
         votingCloses: event.votingCloses ?? null,
         attendees,
       });
@@ -905,7 +853,7 @@ export function TripDataProvider({ tripId, children }: { tripId: string; childre
       attendanceMut.mutate({ eventId, memberId, status }),
   // eslint-disable-next-line react-hooks/exhaustive-deps
   } as any), [
-    trip, tripQuery.isLoading, tripQuery.error, nameToId,
+    trip, tripQuery.isLoading, tripQuery.error, nameToId, dayIdByNumber,
   ]);
 
   return (

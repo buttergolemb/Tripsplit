@@ -44,15 +44,4 @@ export default defineConfig({
       },
     },
   },
-
-  // `vite preview` does not inherit `server.proxy` — mirror it so production builds
-  // tested locally still reach the API on port 4000.
-  preview: {
-    proxy: {
-      '/api': {
-        target: 'http://localhost:4000',
-        changeOrigin: true,
-      },
-    },
-  },
 })
