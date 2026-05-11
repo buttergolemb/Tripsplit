@@ -1,13 +1,14 @@
 import React from "react";
-import { Drawer } from "vaul";
+import { motion, AnimatePresence } from "motion/react";
 import { X } from "lucide-react";
-import { useDeviceFrameElement } from "./DeviceFrameContext";
 
 // ─── Shared Bottom Sheet Shell ───────────────────────────────────────────────
-// Standardises the vaul Drawer chrome across the entire app:
-//   - Consistent overlay, corner radius, handle bar, and close button
-//   - sr-only Title/Description for accessibility (Radix requirement)
-//   - Optional visible subtitle below the title
+// Matches the AddExpenseSheet visual/behavior contract so timeline and other
+// trays animate identically: backdrop fades, sheet slides in from the bottom,
+// background view stays completely static (no scaling, no document body
+// manipulation, no scroll lock side effects). Replaces the previous vaul-based
+// implementation that caused subtle background "refresh" jumps in the
+// timeline screen.
 //
 // Usage:
 //   <BottomSheet open={…} onOpenChange={…} title="Add Category" srDescription="…">
@@ -17,11 +18,11 @@ import { useDeviceFrameElement } from "./DeviceFrameContext";
 export interface BottomSheetProps {
   /** Controlled open state */
   open: boolean;
-  /** Called when the sheet wants to change open state (swipe-down, overlay tap, etc.) */
+  /** Called when the sheet wants to change open state (overlay tap, close X, swipe, etc.) */
   onOpenChange: (open: boolean) => void;
   /** Visible header title */
   title: string;
-  /** Screen-reader-only description (Radix a11y requirement) */
+  /** Screen-reader-only description (kept for backwards compatibility) */
   srDescription?: string;
   /** Optional visible subtitle rendered below the title */
   subtitle?: string;
@@ -40,62 +41,83 @@ export function BottomSheet({
   showClose = true,
   children,
 }: BottomSheetProps) {
-  const deviceFrame = useDeviceFrameElement();
-  const maxHClass = deviceFrame ? "max-h-[88%]" : "max-h-[88vh]";
+  // Close on Escape for keyboard accessibility.
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onOpenChange(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onOpenChange]);
 
   return (
-    <Drawer.Root
-      open={open}
-      onOpenChange={onOpenChange}
-      container={deviceFrame ?? undefined}
-      // Keep the background visually stable behind trays. The default scaling
-      // treatment can read as a "refresh/jump" in this prototype shell.
-      shouldScaleBackground={false}
-    >
-      <Drawer.Portal>
-        <Drawer.Overlay className="fixed inset-0 bg-black/40 z-40" />
-        <Drawer.Content
-          className={`bg-white flex flex-col rounded-t-[24px] fixed bottom-0 left-0 right-0 z-50 outline-none ${maxHClass}`}
-        >
-          {/* ── Accessibility ──────────────────────────────────── */}
-          <Drawer.Title className="sr-only">{title}</Drawer.Title>
-          <Drawer.Description className="sr-only">
-            {srDescription ?? title}
-          </Drawer.Description>
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 bg-black/40 z-[60]"
+            onClick={() => onOpenChange(false)}
+            aria-hidden
+          />
+          <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label={title}
+            aria-describedby={srDescription ? "bottom-sheet-desc" : undefined}
+            initial={{ y: "100%", opacity: 0.6 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: "100%", opacity: 0 }}
+            transition={{ type: "spring", damping: 30, stiffness: 240 }}
+            className="fixed inset-x-0 bottom-0 z-[61] flex max-h-[88%] flex-col bg-white rounded-t-[24px] shadow-[0_-4px_40px_rgba(0,0,0,0.18)] outline-none"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {srDescription && (
+              <span id="bottom-sheet-desc" className="sr-only">
+                {srDescription}
+              </span>
+            )}
 
-          {/* ── Handle bar ─────────────────────────────────────── */}
-          <div className="pt-3 pb-0 flex-shrink-0" aria-hidden>
-            <div className="w-9 h-[5px] rounded-full bg-[#E5E5EA] mx-auto" />
-          </div>
+            {/* Handle */}
+            <div className="pt-3 pb-0 flex-shrink-0" aria-hidden>
+              <div className="w-9 h-[5px] rounded-full bg-[#E5E5EA] mx-auto" />
+            </div>
 
-          {/* ── Header ─────────────────────────────────────────── */}
-          <div className="px-5 pt-4 pb-3 flex items-start justify-between flex-shrink-0">
-            <div className="min-w-0 flex-1">
-              <h3 className="text-[20px] font-semibold text-[#1C1C1E] leading-snug">{title}</h3>
-              {subtitle && (
-                <p className="text-[13px] text-[#8E8E93] font-medium mt-0.5 truncate">
-                  {subtitle}
-                </p>
+            {/* Header */}
+            <div className="px-5 pt-4 pb-3 flex items-start justify-between flex-shrink-0">
+              <div className="min-w-0 flex-1">
+                <h3 className="text-[20px] font-semibold text-[#1C1C1E] leading-snug">
+                  {title}
+                </h3>
+                {subtitle && (
+                  <p className="text-[13px] text-[#8E8E93] font-medium mt-0.5 truncate">
+                    {subtitle}
+                  </p>
+                )}
+              </div>
+              {showClose && (
+                <button
+                  type="button"
+                  onClick={() => onOpenChange(false)}
+                  aria-label={`Close ${title}`}
+                  className="size-8 bg-[#F1F2F5] rounded-full flex items-center justify-center flex-shrink-0 ml-3 mt-0.5 active:bg-[#E5E5EA] active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF]/40"
+                >
+                  <X className="size-4 text-[#8E8E93]" aria-hidden />
+                </button>
               )}
             </div>
-            {showClose && (
-              <button
-                type="button"
-                onClick={() => onOpenChange(false)}
-                aria-label={`Close ${title}`}
-                className="size-8 bg-[#F1F2F5] rounded-full flex items-center justify-center flex-shrink-0 ml-3 mt-0.5 active:bg-[#E5E5EA] active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF]/40"
-              >
-                <X className="size-4 text-[#8E8E93]" aria-hidden />
-              </button>
-            )}
-          </div>
 
-          {/* ── Scrollable content area ────────────────────────── */}
-          <div className="flex-1 touch-pan-y overflow-y-auto overscroll-y-contain px-5 pb-10 [-webkit-overflow-scrolling:touch]">
-            {children}
-          </div>
-        </Drawer.Content>
-      </Drawer.Portal>
-    </Drawer.Root>
+            {/* Scrollable content */}
+            <div className="flex-1 touch-pan-y overflow-y-auto overscroll-y-contain px-5 pb-10 [-webkit-overflow-scrolling:touch]">
+              {children}
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   );
 }
