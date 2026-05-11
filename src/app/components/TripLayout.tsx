@@ -94,12 +94,17 @@ function TripScrollRegion({
   isSubflow: boolean;
   children: React.ReactNode;
 }) {
+  const location = useLocation();
   const { refetch } = useTripData();
+  // Timeline relies heavily on drag-based sheets/trays; disabling pull-to-refresh
+  // here prevents gesture conflicts that can look like a background refresh.
+  const disablePullToRefresh =
+    isSubflow || location.pathname.includes("/timeline");
   return (
     <div className="min-h-0 flex-1 overflow-hidden">
       <PullToRefresh
         onRefresh={refetch}
-        disabled={isSubflow}
+        disabled={disablePullToRefresh}
         className="h-full"
       >
         {children}
