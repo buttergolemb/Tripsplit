@@ -7,17 +7,20 @@
 // server runtime modules here, only type-only aliases.
 import type {
   BalancesDTO, ExpenseDTO, MemberDTO, TripDTO, TripSummaryDTO,
-  DayScheduleDTO, TimelineEventDTO, AttendanceStatus, EventState,
+  DayScheduleDTO, TimelineEventDTO, EventDiscussionPostDTO, AttendanceStatus, EventState,
   RSVPStatus, TripPhase, BudgetCategoryDTO, TripRuleDTO, DepositPolicyDTO,
 } from "../../server/types";
 
 export type {
   BalancesDTO, ExpenseDTO, MemberDTO, TripDTO, TripSummaryDTO,
-  DayScheduleDTO, TimelineEventDTO, AttendanceStatus, EventState,
+  DayScheduleDTO, TimelineEventDTO, EventDiscussionPostDTO, AttendanceStatus, EventState,
   RSVPStatus, TripPhase, BudgetCategoryDTO, TripRuleDTO, DepositPolicyDTO,
 };
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api";
+// Paths passed to request() always start with `/` (e.g. `/trips`). Dev proxy uses `/api`;
+// deployed backends expose `/api/...`, so set `https://host.example/api` (no trailing slash).
+const rawBase = import.meta.env.VITE_API_BASE_URL ?? "/api";
+const API_BASE = rawBase.replace(/\/+$/, "");
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -147,6 +150,13 @@ export const timelineApi = {
       `/trips/${tripId}/events/${eventId}/attendees/${memberId}`,
       { method: "PUT", body: JSON.stringify({ status }) }
     ),
+  listDiscussion: (tripId: string, eventId: string) =>
+    request<EventDiscussionPostDTO[]>(`/trips/${tripId}/events/${eventId}/discussion`),
+  postDiscussion: (tripId: string, eventId: string, input: { memberId: string; body: string }) =>
+    request<EventDiscussionPostDTO>(`/trips/${tripId}/events/${eventId}/discussion`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
 };
 
 // ─── Budget categories ──────────────────────────────────────────────────────

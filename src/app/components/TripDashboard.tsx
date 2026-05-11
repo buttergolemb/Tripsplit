@@ -19,8 +19,13 @@ import {
 import React from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTripData } from "./TripDataContext";
-import { AddExpenseSheet } from "./AddExpenseSheet";
+import { AddExpenseSheet, YOU, type ExpenseSavePayload } from "./AddExpenseSheet";
+import { ExpenseToast } from "./ExpenseToast";
 import { TripOverviewSkeleton } from "./Skeletons";
+import { useCurrentUser } from "../../lib/currentUser";
+import { expenseDateRank } from "../../lib/expenseDate";
+import { timelineDayMatchesToday } from "../../lib/tripLiveDay";
+import { saveReceiptPhoto } from "../../lib/receiptPhotos";
 
 const avatarColors: Record<string, string> = {
   S: "bg-[#007AFF]", M: "bg-[#34C759]", A: "bg-[#FF9F0A]",
@@ -45,16 +50,13 @@ type CoordinationEvent = {
   priority: "high" | "medium" | "low";
   resolved: boolean;
   linkTo?: string;
+  /** Higher sorts first (newest activity at top). */
+  feedRank: number;
 };
 
-// Build a relative-time label from a date string (or "now"/"Yesterday" tokens
-// that show up in expense.date). We keep it lightweight — the UI only needs
-// "Today", "Yesterday", or a weekday/short date.
-function shortTime(label: string | undefined): string {
-  if (!label) return "Recent";
-  if (/^now$/i.test(label) || /today/i.test(label)) return "Today";
-  if (/yesterday/i.test(label)) return "Yesterday";
-  return label.split(",")[0]; // e.g. "Saturday, Mar 15" → "Saturday"
+function expenseActivityRank(e: { date?: string }, expenseIdx: number, total: number): number {
+  const base = expenseDateRank(e.date);
+  return base + (total - expenseIdx) * 1e-6;
 }
 
 function buildActivityFeed(
@@ -62,9 +64,13 @@ function buildActivityFeed(
   youName: string,
 ): CoordinationEvent[] {
   const events: CoordinationEvent[] = [];
+  const totalExp = trip.expenses.length;
 
-  // Unconfirmed expenses → high-priority "needs review"
-  for (const e of trip.expenses) {
+  for (let idx = 0; idx < trip.expenses.length; idx++) {
+    const e = trip.expenses[idx];
+    const rank = expenseActivityRank(e, idx, totalExp);
+    const tsLabel = e.date?.trim() ? e.date : "Recent";
+
     if (!e.confirmed) {
       const yourSplit = e.splitWith.find((s: any) => s.name === youName);
       const youOweAmt = yourSplit && !yourSplit.paid && e.paidBy !== youName ? yourSplit.share : 0;
@@ -76,17 +82,15 @@ function buildActivityFeed(
         implication: youOweAmt > 0
           ? `Your share: $${youOweAmt.toFixed(0)} · needs your approval`
           : "Needs approval",
-        timestamp: shortTime(e.date),
+        timestamp: tsLabel,
         priority: "high",
         resolved: false,
         linkTo: "/money",
+        feedRank: rank + 0.0005,
       });
+      continue;
     }
-  }
 
-  // Confirmed expenses → "added expense" events
-  for (const e of trip.expenses) {
-    if (!e.confirmed) continue;
     const yourSplit = e.splitWith.find((s: any) => s.name === youName);
     const youPaid = e.paidBy === youName;
     const youOwe = yourSplit && !yourSplit.paid && !youPaid ? yourSplit.share : 0;
@@ -104,34 +108,37 @@ function buildActivityFeed(
         : youOwe > 0
         ? `You owe $${youOwe.toFixed(0)}`
         : "Settled",
-      timestamp: shortTime(e.date),
+      timestamp: tsLabel,
       priority: youOwe > 0 ? "high" : "medium",
       resolved: youPaid ? fullySettled : !!yourSplit?.paid || youOwe === 0,
       linkTo: "/money",
+      feedRank: rank,
     });
   }
 
-  // Pending votes / proposals from the timeline
   for (const day of trip.timeline) {
+    const dayRank = expenseDateRank(day.date);
     for (const evt of day.events ?? []) {
       if (evt.state === "voting" || evt.state === "proposed") {
         const total = (evt.votesFor ?? 0) + (evt.votesAgainst ?? 0);
+        const ts = day.date && evt.time ? `${day.date} · ${evt.time}` : evt.time ?? day.date ?? "Pending";
         events.push({
           id: `vote-${evt.id}`,
           type: "proposal_created",
           actor: "Trip",
           action: `proposed ${evt.title}`,
           implication: total > 0 ? `${evt.votesFor ?? 0}/${total} votes in` : "Vote pending",
-          timestamp: evt.time ?? "Pending",
+          timestamp: ts,
           priority: "medium",
           resolved: false,
-          linkTo: "/timeline",
+          linkTo: `/timeline?day=${day.dayNumber}&event=${evt.id}`,
+          feedRank: dayRank + (evt.votesFor ?? 0) * 1e-9,
         });
       }
     }
   }
 
-  // Newly committed members
+  let memberSeq = 0;
   for (const p of trip.participants) {
     if ((p as any).rsvp === "committed" && p.name !== youName) {
       events.push({
@@ -143,29 +150,86 @@ function buildActivityFeed(
         timestamp: "Recent",
         priority: "low",
         resolved: true,
+        feedRank: memberSeq++ * 1e-12,
       });
     }
   }
 
-  // Sort: unresolved before resolved, then by priority
-  const order = { high: 0, medium: 1, low: 2 } as const;
-  events.sort((a, b) => {
-    if (a.resolved !== b.resolved) return a.resolved ? 1 : -1;
-    return order[a.priority] - order[b.priority];
-  });
-
+  events.sort((a, b) => b.feedRank - a.feedRank);
   return events.slice(0, 8);
 }
 
 export default function TripDashboard() {
   const { tripId } = useParams();
-  const { trip, isLoading } = useTripData();
+  const { trip, isLoading, addExpense } = useTripData();
   const [showExpenseModal, setShowExpenseModal] = React.useState(false);
+  const [toast, setToast] = React.useState<{ emoji: string; description: string; amount: string } | null>(null);
+
+  const [currentUserName] = useCurrentUser();
+  const YOU_NAME = trip.participants.some((p) => p.name === currentUserName)
+    ? currentUserName
+    : YOU;
 
   const activityFeed = React.useMemo(
-    () => buildActivityFeed(trip as any, "Sarah"),
-    [trip]
+    () => buildActivityFeed(trip as any, YOU_NAME),
+    [trip, YOU_NAME]
   );
+
+  const handleExpenseSaved = React.useCallback((info: ExpenseSavePayload) => {
+    const amountNum = parseFloat(info.amount);
+    if (!Number.isFinite(amountNum) || amountNum <= 0) return;
+
+    const payer =
+      trip.participants.find((p) => p.name === info.paidByName) ??
+      trip.participants.find((p) => p.name === YOU_NAME) ??
+      trip.participants[0];
+
+    const splits = info.splits
+      .map((s) => {
+        const match = trip.participants.find((p) => p.name === s.name);
+        if (!match) return null;
+        return {
+          name: match.name,
+          memberId: match.id,
+          share: +s.share.toFixed(2),
+          paid: false,
+        };
+      })
+      .filter((s): s is NonNullable<typeof s> => s !== null);
+
+    const safeSplits =
+      splits.length > 0
+        ? splits
+        : trip.participants.map((p) => ({
+            name: p.name,
+            memberId: p.id,
+            share: +(amountNum / trip.participants.length).toFixed(2),
+            paid: false,
+          }));
+
+    void addExpense({
+      description: info.description,
+      category: `${info.emoji} ${info.categoryName}`,
+      emoji: info.emoji,
+      amount: amountNum,
+      paidBy: payer.name,
+      paidById: payer.id,
+      date: info.dateLabel,
+      confirmed: true,
+      splitWith: safeSplits,
+    });
+
+    if (info.receiptImage && trip.id) {
+      saveReceiptPhoto(trip.id, info.description, amountNum, info.receiptImage);
+    }
+
+    setShowExpenseModal(false);
+    setTimeout(() => setToast({
+      emoji: info.emoji,
+      description: info.description,
+      amount: info.amount,
+    }), 200);
+  }, [addExpense, trip.id, trip.participants, YOU_NAME]);
 
   // First paint guard: while the trip query is loading, render a skeleton so
   // the hero numbers don't flash zeroed state.
@@ -178,12 +242,17 @@ export default function TripDashboard() {
   const committedCount = trip.participants.filter((p) => p.rsvp === "committed").length;
   const totalParticipants = trip.participants.length;
 
-  // Today's events from timeline
-  const todayEvents = isDuring && trip.timeline.length > 1
-    ? trip.timeline[1].events // Day 2 for Austin (during trip)
-    : trip.timeline.length > 0
-    ? trip.timeline[0].events
-    : [];
+  const liveScheduleDay = React.useMemo(() => {
+    if (trip.timeline.length === 0) return null;
+    const todayRow = trip.timeline.find((d) => timelineDayMatchesToday(d.date));
+    if (todayRow) return todayRow;
+    if (trip.phase === "during" && trip.timeline.length >= 2) return trip.timeline[1];
+    return trip.timeline[0];
+  }, [trip.timeline, trip.phase]);
+
+  const liveDayNum = liveScheduleDay?.dayNumber ?? 1;
+
+  const todayEvents = liveScheduleDay?.events ?? [];
 
   // Balance calculation
   const totalSpent = trip.expenses.filter((e) => e.confirmed).reduce((s, e) => s + e.amount, 0);
@@ -384,60 +453,66 @@ export default function TripDashboard() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
+            className="bg-white rounded-[22px] p-5 shadow-[var(--shadow-apple-1)] hover:shadow-[var(--shadow-apple-2)] transition-shadow duration-300 group"
           >
             <Link
-              to={`/trip/${tripId}/timeline`}
-              className="block bg-white rounded-[22px] p-5 shadow-[var(--shadow-apple-1)] hover:shadow-[var(--shadow-apple-2)] transition-shadow duration-300 group"
+              to={`/trip/${tripId}/timeline?day=${liveDayNum}`}
+              className="flex items-center justify-between mb-4"
             >
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-[17px] font-semibold text-[#1C1C1E]">Today</h3>
-                  <p className="text-[13px] text-[#8E8E93] mt-0.5">Day 2 · March 16</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[12px] font-medium text-[#007AFF]">Full schedule</span>
-                  <ChevronRight className="size-3.5 text-[#007AFF]" />
-                </div>
+              <div>
+                <h3 className="text-[17px] font-semibold text-[#1C1C1E]">Today</h3>
+                <p className="text-[13px] text-[#8E8E93] mt-0.5">
+                  Day {liveDayNum}
+                  {liveScheduleDay?.date ? ` · ${liveScheduleDay.date}` : ""}
+                </p>
               </div>
-
-              <div className="space-y-2.5">
-                {todayEvents.slice(0, 4).map((evt) => (
-                  <div key={evt.id} className="flex items-center gap-3">
-                    <div
-                      className={`size-10 rounded-[12px] flex items-center justify-center text-lg flex-shrink-0 ${
-                        evt.state === "freetime"
-                          ? "bg-[#F7F7F5]"
-                          : evt.state === "voting" || evt.state === "proposed"
-                          ? "bg-[#F1EEFF]"
-                          : "bg-[#FFF3E0]"
-                      }`}
-                    >
-                      {evt.emoji}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p
-                        className={`text-[15px] font-medium leading-tight truncate ${
-                          evt.state === "freetime" ? "text-[#8E8E93]" : "text-[#1C1C1E]"
-                        }`}
-                      >
-                        {evt.title}
-                      </p>
-                      <p className="text-[12px] text-[#8E8E93] mt-0.5">{evt.time}</p>
-                    </div>
-                    {evt.state === "confirmed" && evt.attendees && (
-                      <span className="text-[11px] font-medium text-[#34C759] bg-[#E8F7EE] px-2 py-0.5 rounded-full">
-                        {evt.attendees.length} going
-                      </span>
-                    )}
-                    {(evt.state === "voting" || evt.state === "proposed") && (
-                      <span className="text-[11px] font-semibold text-[#8E8EFA] bg-[#F1EEFF] px-2 py-0.5 rounded-full">
-                        Vote
-                      </span>
-                    )}
-                  </div>
-                ))}
+              <div className="flex items-center gap-2">
+                <span className="text-[12px] font-medium text-[#007AFF]">Full schedule</span>
+                <ChevronRight className="size-3.5 text-[#007AFF]" />
               </div>
             </Link>
+
+            <div className="space-y-2.5">
+              {todayEvents.slice(0, 4).map((evt) => (
+                <Link
+                  key={evt.id}
+                  to={`/trip/${tripId}/timeline?day=${liveDayNum}&event=${evt.id}`}
+                  className="flex items-center gap-3 rounded-[14px] -mx-1 px-1 py-1 hover:bg-[#F7F7F5] transition-colors active:scale-[0.99]"
+                >
+                  <div
+                    className={`size-10 rounded-[12px] flex items-center justify-center text-lg flex-shrink-0 ${
+                      evt.state === "freetime"
+                        ? "bg-[#F7F7F5]"
+                        : evt.state === "voting" || evt.state === "proposed"
+                        ? "bg-[#F1EEFF]"
+                        : "bg-[#FFF3E0]"
+                    }`}
+                  >
+                    {evt.emoji}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className={`text-[15px] font-medium leading-tight truncate ${
+                        evt.state === "freetime" ? "text-[#8E8E93]" : "text-[#1C1C1E]"
+                      }`}
+                    >
+                      {evt.title}
+                    </p>
+                    <p className="text-[12px] text-[#8E8E93] mt-0.5">{evt.time}</p>
+                  </div>
+                  {evt.state === "confirmed" && evt.attendees && (
+                    <span className="text-[11px] font-medium text-[#34C759] bg-[#E8F7EE] px-2 py-0.5 rounded-full">
+                      {evt.attendees.length} going
+                    </span>
+                  )}
+                  {(evt.state === "voting" || evt.state === "proposed") && (
+                    <span className="text-[11px] font-semibold text-[#8E8EFA] bg-[#F1EEFF] px-2 py-0.5 rounded-full">
+                      Vote
+                    </span>
+                  )}
+                </Link>
+              ))}
+            </div>
           </motion.div>
         )}
 
@@ -617,8 +692,19 @@ export default function TripDashboard() {
           <AddExpenseSheet
             onClose={() => setShowExpenseModal(false)}
             participants={trip.participants.map((p) => p.name)}
-            onSaved={() => setShowExpenseModal(false)}
+            onSaved={handleExpenseSaved}
             tripId={trip.id}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {toast && (
+          <ExpenseToast
+            emoji={toast.emoji}
+            description={toast.description}
+            amount={toast.amount}
+            onDismiss={() => setToast(null)}
           />
         )}
       </AnimatePresence>

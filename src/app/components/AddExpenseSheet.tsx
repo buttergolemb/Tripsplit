@@ -12,8 +12,8 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useCurrentUser } from "../../lib/currentUser";
+import { formatExpenseDateLabelFromISO, formatExpenseWhenChipFromISO, todayISODate } from "../../lib/expenseDate";
 import receiptPottoImg from "../../assets/receipt-potto.png";
-import { rememberAssignment, suggestAssignment } from "../../lib/itemAssignmentMemory";
 
 // Only allow digits and a single decimal point (max 2 fraction digits).
 function sanitizeMoneyInput(raw: string): string {
@@ -443,7 +443,6 @@ function LineItemSplitView({
   setAssignments,
   onContinue,
   onBack,
-  showSuggestionHint = false,
 }: {
   receipt: SampleReceipt;
   participants: string[];
@@ -452,7 +451,6 @@ function LineItemSplitView({
   setAssignments: (next: Record<number, string[]>) => void;
   onContinue: () => void;
   onBack: () => void;
-  showSuggestionHint?: boolean;
 }) {
   const [openItem, setOpenItem] = React.useState<number | null>(null);
 
@@ -686,19 +684,6 @@ function LineItemSplitView({
           })}
         </div>
       </div>
-
-      {/* Auto-suggest hint */}
-      {showSuggestionHint && (
-        <div className="flex items-start gap-2.5 bg-[#F1EEFF] rounded-[12px] p-3 mb-3">
-          <Sparkles className="size-4 text-[#8E8EFA] mt-0.5 flex-shrink-0" />
-          <div>
-            <p className="text-[12px] font-semibold text-[#1C1C1E]">Smart suggestions applied</p>
-            <p className="text-[11px] text-[#6E6E73] leading-snug mt-0.5">
-              We pre-filled assignments based on past splits. Tap any item to adjust.
-            </p>
-          </div>
-        </div>
-      )}
 
       <div className="flex items-baseline justify-between mb-2">
         <p className="text-[12px] font-semibold text-[#8E8E93] uppercase tracking-[0.6px]">Assign each item</p>
@@ -977,6 +962,8 @@ export type ExpenseSavePayload = {
   // Each entry is a real share in dollars. Callers can treat this list as the
   // authoritative split — "equal" mode fills them in before emitting.
   splits: { name: string; share: number }[];
+  /** Stored as API `date_label` — must reflect the user's picked calendar day. */
+  dateLabel: string;
   // Optional URL to a receipt photo (set when the user used the scan flow).
   // The host app stashes this in localStorage so it can be re-displayed later.
   receiptImage?: string;
@@ -1009,6 +996,7 @@ export function AddExpenseSheet({
   const [splitMode, setSplitMode] = React.useState<"equal" | "custom">("equal");
   const [customAmounts, setCustomAmounts] = React.useState<Record<string, string>>({});
   const [activeSplitName, setActiveSplitName] = React.useState<string | null>(null);
+  const [expenseDateISO, setExpenseDateISO] = React.useState(todayISODate);
 
   // ── Receipt scanner state ───────────────────────────────────────────────
   const [scanView, setScanView] = React.useState<
@@ -1018,27 +1006,9 @@ export function AddExpenseSheet({
   const [itemAssignments, setItemAssignments] = React.useState<Record<number, string[]>>({});
   const [scannedBadge, setScannedBadge] = React.useState(false);
 
-  const [usedSuggestions, setUsedSuggestions] = React.useState(false);
-
   const openCamera = () => {
     setScanningReceipt(DEFAULT_RECEIPT);
-
-    // Pre-fill assignments from past trips using item-name memory.
-    // Only fills items where we have a usable suggestion; others stay blank.
-    const presets: Record<number, string[]> = {};
-    let hits = 0;
-    if (tripId) {
-      DEFAULT_RECEIPT.items.forEach((item, idx) => {
-        if (isTaxOrTip(item.name)) return;
-        const suggested = suggestAssignment(tripId, item.name, participants);
-        if (suggested && suggested.length > 0) {
-          presets[idx] = suggested;
-          hits++;
-        }
-      });
-    }
-    setItemAssignments(presets);
-    setUsedSuggestions(hits > 0);
+    setItemAssignments({});
     setScanView("camera");
   };
 
@@ -1047,17 +1017,6 @@ export function AddExpenseSheet({
     const receipt = scanningReceipt;
     if (!receipt) return;
     const shares = computePerMemberShares(receipt, itemAssignments, participants);
-
-    // Remember each non-tax/tip assignment for next time.
-    if (tripId) {
-      receipt.items.forEach((item, idx) => {
-        if (isTaxOrTip(item.name)) return;
-        const members = itemAssignments[idx] ?? [];
-        if (members.length > 0) {
-          rememberAssignment(tripId, item.name, members);
-        }
-      });
-    }
 
     setAmount(receipt.total.toFixed(2));
     setDescription(receipt.description);
@@ -1170,6 +1129,7 @@ export function AddExpenseSheet({
         paidByName: paidBy,
         splitMode,
         splits,
+        dateLabel: formatExpenseDateLabelFromISO(expenseDateISO),
         receiptImage: scanningReceipt?.image,
       });
       onClose();
@@ -1252,7 +1212,6 @@ export function AddExpenseSheet({
               setAssignments={setItemAssignments}
               onContinue={applyItemSplit}
               onBack={() => setScanView("camera")}
-              showSuggestionHint={usedSuggestions}
             />
           )}
         </AnimatePresence>
@@ -1433,20 +1392,29 @@ export function AddExpenseSheet({
             </motion.div>
           </div>
 
-          {/* ── Section 4: Date + Split ── */}
+          {/* ── Section 4: Date + Split (compact chips — matches sheet mockup) ── */}
           <div>
-            <div className="flex gap-2">
-              <div className="flex-1 bg-[#F7F7F5] rounded-[14px] px-3.5 py-3 flex items-center gap-2">
-                <Clock className="size-4 text-[#C7C7CC] flex-shrink-0" />
-                <span className="text-[13px] text-[#8E8E93]">Now · Fri Mar 18</span>
-              </div>
+            <div className="flex gap-2 items-stretch">
+              <label className="relative flex-1 min-w-0 overflow-hidden rounded-[14px] bg-[#F7F7F5] px-3.5 py-3 flex items-center gap-2 cursor-pointer transition-transform active:scale-[0.97]">
+                <Clock className="size-4 text-[#C7C7CC] flex-shrink-0 pointer-events-none" aria-hidden />
+                <span className="text-[13px] font-medium text-[#1C1C1E] truncate pointer-events-none select-none">
+                  {formatExpenseWhenChipFromISO(expenseDateISO)}
+                </span>
+                <input
+                  type="date"
+                  value={expenseDateISO}
+                  onChange={(e) => setExpenseDateISO(e.target.value)}
+                  className="absolute inset-0 cursor-pointer opacity-0 w-full h-full"
+                  aria-label="Expense date"
+                />
+              </label>
               <button
                 type="button"
                 onClick={() => { setShowSplitPicker((p) => !p); setFocusedField(null); }}
                 aria-haspopup="dialog"
                 aria-expanded={showSplitPicker}
                 aria-label={`Split with ${splitMembers.size} ${splitMembers.size === 1 ? "person" : "people"}. Adjust split.`}
-                className={`flex-1 rounded-[14px] px-3.5 py-3 flex items-center gap-2 transition-all active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF]/40 ${
+                className={`flex-1 rounded-[14px] px-3.5 py-3 min-h-0 flex items-center gap-2 transition-all active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF]/40 ${
                   showSplitPicker ? "bg-[#EAF2FF] ring-1.5 ring-[#007AFF]/20" : "bg-[#F7F7F5]"
                 }`}
               >
@@ -1454,11 +1422,11 @@ export function AddExpenseSheet({
                   ? <SplitSquareHorizontal className={`size-4 flex-shrink-0 ${showSplitPicker ? "text-[#007AFF]" : "text-[#C7C7CC]"}`} />
                   : <Users className={`size-4 flex-shrink-0 ${showSplitPicker ? "text-[#007AFF]" : "text-[#C7C7CC]"}`} />
                 }
-                <span className={`text-[13px] ${showSplitPicker ? "text-[#007AFF] font-medium" : "text-[#8E8E93]"}`}>
+                <span className={`text-[13px] font-medium truncate ${showSplitPicker ? "text-[#007AFF]" : "text-[#1C1C1E]"}`}>
                   {splitMode === "custom"
                     ? "Custom split"
                     : allSelected
-                    ? "Split with group"
+                    ? `Split ${splitCount} ${splitCount === 1 ? "way" : "ways"}`
                     : `Split ${splitCount} of ${participants.length}`}
                 </span>
               </button>
@@ -1724,7 +1692,7 @@ export function AddExpenseSheet({
                 ? `Assign $${remaining.toFixed(2)} more to save`
                 : `Remove $${Math.abs(remaining).toFixed(2)} to save`
             ) : (
-              "Add Category"
+              "Add expense"
             )}
           </motion.button>
         </motion.div>

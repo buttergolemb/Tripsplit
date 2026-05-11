@@ -1,3 +1,5 @@
+import "dotenv/config";
+
 // Postgres-backed data layer for TripSplit.
 //
 // Connects via DATABASE_URL (e.g. postgres://user:pass@host:5432/tripsplit).

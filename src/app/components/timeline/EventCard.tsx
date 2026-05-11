@@ -10,11 +10,13 @@ interface EventCardProps {
   onPropose?: (event: Event) => void;
   /** When true, suppresses the time label rendered below the emoji (used by TimelineSpine which renders its own time rail) */
   hideTime?: boolean;
+  /** Scroll target for deep links (`#timeline-event-{id}`) */
+  anchorId?: string;
 }
 
 const avatarColors = ["bg-[#007AFF]", "bg-[#34C759]", "bg-[#FF9F0A]", "bg-[#AF52DE]", "bg-[#FF6482]", "bg-[#5AC8FA]"];
 
-export function EventCard({ event, onClick, onVote, onPropose, hideTime }: EventCardProps) {
+export function EventCard({ event, onClick, onVote, onPropose, hideTime, anchorId }: EventCardProps) {
   const isFreeTime = event.state === 'freetime';
 
   if (isFreeTime) {
@@ -58,11 +60,12 @@ export function EventCard({ event, onClick, onVote, onPropose, hideTime }: Event
 
   return (
     <motion.div
+      id={anchorId}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       whileTap={{ scale: 0.98 }}
       onClick={() => onClick(event)}
-      className={`w-full rounded-[18px] transition-all duration-200 cursor-pointer ${stateStyles[event.state] || stateStyles.confirmed}`}
+      className={`scroll-mt-36 w-full rounded-[18px] transition-all duration-200 cursor-pointer ${stateStyles[event.state] || stateStyles.confirmed}`}
     >
       <div className="p-4 flex gap-3.5">
         {/* Time + Emoji */}

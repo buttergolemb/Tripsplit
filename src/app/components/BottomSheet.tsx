@@ -101,7 +101,7 @@ export function BottomSheet({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: "100%", opacity: 0 }}
             transition={{ type: "spring", damping: 30, stiffness: 240 }}
-            className="fixed inset-x-0 bottom-0 z-[61] flex max-h-[88%] flex-col bg-white rounded-t-[24px] shadow-[0_-4px_40px_rgba(0,0,0,0.18)] outline-none"
+            className="fixed inset-x-0 bottom-0 z-[61] flex max-h-[92%] flex-col bg-white rounded-t-[28px] shadow-[0_-4px_40px_rgba(0,0,0,0.18)] outline-none"
             onClick={(e) => e.stopPropagation()}
           >
             {srDescription && (

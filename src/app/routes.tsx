@@ -5,22 +5,12 @@ import MoneyScreen from "./components/MoneyScreen";
 import TripList from "./components/TripList";
 import Timeline from "./components/Timeline";
 import TripLayout from "./components/TripLayout";
-import TripCardTest from "./components/TripCardTest";
-import TrayLab from "./components/TrayLab";
 import TripSettings from "./components/TripSettings";
 
 export const router = createHashRouter([
   {
     path: "/",
     Component: TripList,
-  },
-  {
-    path: "/card-test",
-    Component: TripCardTest,
-  },
-  {
-    path: "/tray-lab",
-    Component: TrayLab,
   },
   {
     path: "/trip/:tripId",

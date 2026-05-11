@@ -249,6 +249,20 @@ app.put("/api/trips/:id/events/:eventId/attendees/:memberId", h(async (req, res)
   res.json({ ok: true });
 }));
 
+app.get("/api/trips/:id/events/:eventId/discussion", h(async (req, res) => {
+  res.json(await repo.listEventDiscussion(req.params.eventId));
+}));
+
+app.post("/api/trips/:id/events/:eventId/discussion", h(async (req, res) => {
+  const { memberId, body } = z.object({
+    memberId: z.string().min(1),
+    body: z.string().min(1).max(2000),
+  }).parse(req.body);
+  const post = await repo.addEventDiscussionPost(req.params.id, req.params.eventId, memberId, body);
+  if (!post) return res.status(404).json({ error: "Event or member not found" });
+  res.status(201).json(post);
+}));
+
 // ─── Budget categories ──────────────────────────────────────────────────────
 
 const budgetCategorySchema = z.object({

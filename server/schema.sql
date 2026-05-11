@@ -79,6 +79,17 @@ CREATE TABLE IF NOT EXISTS timeline_events (
 CREATE INDEX IF NOT EXISTS idx_events_day ON timeline_events(day_id);
 CREATE INDEX IF NOT EXISTS idx_events_trip ON timeline_events(trip_id);
 
+CREATE TABLE IF NOT EXISTS event_discussion_posts (
+  id         TEXT        PRIMARY KEY,
+  event_id   TEXT        NOT NULL REFERENCES timeline_events(id) ON DELETE CASCADE,
+  trip_id    TEXT        NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  member_id  TEXT        NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  body       TEXT        NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_discussion_event ON event_discussion_posts(event_id);
+CREATE INDEX IF NOT EXISTS idx_discussion_trip ON event_discussion_posts(trip_id);
+
 CREATE TABLE IF NOT EXISTS event_attendees (
   event_id   TEXT NOT NULL REFERENCES timeline_events(id) ON DELETE CASCADE,
   member_id  TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,

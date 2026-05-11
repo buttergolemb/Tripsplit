@@ -191,32 +191,6 @@ const settingsNote: Note = {
   ],
 };
 
-const cardTestNote: Note = {
-  title: "Component · Card test",
-  tagline: "Static playground for the trip card component.",
-  sections: [
-    {
-      heading: "What this is",
-      body: [
-        "A scratch route used while iterating on the home-screen trip card. It renders every variant (active, past, draft, with/without balance) in isolation so styling regressions show up immediately.",
-      ],
-    },
-  ],
-};
-
-const trayLabNote: Note = {
-  title: "Component · Tray lab",
-  tagline: "Isolated harness for bottom-sheet and tray interactions.",
-  sections: [
-    {
-      heading: "What this is",
-      body: [
-        "A sandbox route to exercise the BottomSheet component in isolation — different heights, scroll behaviors, nested content. Useful when tuning gesture/snap behavior without opening a real trip.",
-      ],
-    },
-  ],
-};
-
 const defaultNote: Note = {
   title: "TripSplit prototype",
   tagline: "Pick a route on the left to see its notes here.",
@@ -233,8 +207,6 @@ const defaultNote: Note = {
 
 const patterns: Pattern[] = [
   { test: matchesRoute("/"), note: tripListNote },
-  { test: matchesRoute("/card-test"), note: cardTestNote },
-  { test: matchesRoute("/tray-lab"), note: trayLabNote },
   { test: matchesRoute("/trip/:tripId"), note: tripOverviewNote },
   { test: matchesRoute("/trip/:tripId/timeline"), note: timelineNote },
   { test: matchesRoute("/trip/:tripId/money"), note: moneyNote },

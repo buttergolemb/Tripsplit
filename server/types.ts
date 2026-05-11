@@ -46,6 +46,15 @@ export interface AttendeeDTO {
   status: AttendanceStatus;
 }
 
+export interface EventDiscussionPostDTO {
+  id: string;
+  eventId: string;
+  memberId: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
+}
+
 export interface TimelineEventDTO {
   id: string;
   dayId: string;

@@ -14,10 +14,12 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import React from "react";
 import { AddExpenseSheet, YOU, AVATAR_COLORS, type ExpenseSavePayload } from "./AddExpenseSheet";
+import { ExpenseToast } from "./ExpenseToast";
 import { useTripData, type Expense } from "./TripDataContext";
 import { useCurrentUser } from "../../lib/currentUser";
 import { MoneyScreenSkeleton } from "./Skeletons";
 import { saveReceiptPhoto, getReceiptPhoto } from "../../lib/receiptPhotos";
+import { expenseDateRank } from "../../lib/expenseDate";
 
 // ─── Scroll lock hook ───────────────────────────────────────────────────────
 
@@ -77,46 +79,6 @@ const paymentMethodColors: Record<string, string> = {
   Zelle: "text-[#6D1ED4]",
   "Cash App": "text-[#00C244]",
 };
-
-// ─── Success Toast ──────────────────────────────────────────────────────────
-
-function ExpenseToast({
-  emoji, description, amount, onDismiss,
-}: {
-  emoji: string; description: string; amount: string; onDismiss: () => void;
-}) {
-  React.useEffect(() => {
-    const t = setTimeout(onDismiss, 3200);
-    return () => clearTimeout(t);
-  }, [onDismiss]);
-
-  return (
-    <motion.div
-      initial={{ y: 80, opacity: 0, scale: 0.92 }}
-      animate={{ y: 0, opacity: 1, scale: 1 }}
-      exit={{ y: 80, opacity: 0, scale: 0.92 }}
-      transition={{ type: "spring", damping: 22, stiffness: 280 }}
-      className="fixed bottom-28 left-1/2 -translate-x-1/2 z-[70] flex items-center gap-3 bg-[#1C1C1E] text-white pl-3.5 pr-4 py-3 rounded-[20px] shadow-[0_8px_32px_rgba(0,0,0,0.28)] max-w-[320px] w-[calc(100%-32px)]"
-      onClick={onDismiss}
-    >
-      <div className="size-9 rounded-[12px] bg-[#34C759]/20 flex items-center justify-center flex-shrink-0">
-        <CheckCircle2 className="size-5 text-[#34C759]" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-[14px] font-semibold text-white leading-tight">Expense added!</p>
-        <p className="text-[12px] text-[#AEAEB2] truncate mt-0.5">
-          {emoji} {description} · <span className="text-[#34C759] font-semibold">${amount}</span> split with everyone
-        </p>
-      </div>
-      <motion.div
-        className="absolute bottom-0 left-0 right-0 h-[3px] rounded-b-[20px] bg-[#34C759]/60 origin-left"
-        initial={{ scaleX: 1 }}
-        animate={{ scaleX: 0 }}
-        transition={{ duration: 3.2, ease: "linear" }}
-      />
-    </motion.div>
-  );
-}
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
@@ -216,11 +178,21 @@ export default function MoneyScreen() {
     return { paid, total: owes.length };
   };
 
+  const sortedConfirmed = [...confirmedExpenses].sort((a, b) => {
+    const dr = expenseDateRank(b.date) - expenseDateRank(a.date);
+    if (dr !== 0) return dr;
+    return b.id.localeCompare(a.id);
+  });
+
   const expensesByDate: Record<string, Expense[]> = {};
-  for (const expense of trip.expenses) {
+  for (const expense of sortedConfirmed) {
     const key = expense.date || "Undated";
     (expensesByDate[key] ??= []).push(expense);
   }
+
+  const sortedExpenseDateKeys = Object.keys(expensesByDate).sort(
+    (a, b) => expenseDateRank(b) - expenseDateRank(a),
+  );
 
   const handleExpenseSaved = (info: ExpenseSavePayload) => {
     const amountNum = parseFloat(info.amount);
@@ -269,7 +241,7 @@ export default function MoneyScreen() {
       amount: amountNum,
       paidBy: payer.name,
       paidById: payer.id,
-      date: new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" }),
+      date: info.dateLabel,
       confirmed: true,
       splitWith: safeSplits,
     });
@@ -283,7 +255,7 @@ export default function MoneyScreen() {
     setShowExpenseModal(false);
     setTimeout(() => setToast({
       emoji: info.emoji, description: info.description,
-      amount: info.amount, categoryName: info.categoryName,
+      amount: info.amount,
     }), 200);
   };
 
@@ -464,7 +436,8 @@ export default function MoneyScreen() {
         )}
 
         {/* Expense Feed */}
-        {Object.entries(expensesByDate).map(([date, expenses], dateIndex) => {
+        {sortedExpenseDateKeys.map((date, dateIndex) => {
+          const expenses = expensesByDate[date];
           const confirmedInDay = expenses.filter((e) => e.confirmed);
           if (confirmedInDay.length === 0) return null;
           return (

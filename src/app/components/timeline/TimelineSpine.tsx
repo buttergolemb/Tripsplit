@@ -404,6 +404,7 @@ export function TimelineSpine({ events, onEventClick, onVote, onPropose, onGapPr
 
               <EventCard
                 event={event}
+                anchorId={`timeline-event-${event.id}`}
                 onClick={onEventClick}
                 onVote={onVote}
                 onPropose={onPropose}
@@ -430,6 +431,7 @@ export function TimelineSpine({ events, onEventClick, onVote, onPropose, onGapPr
               <EventCard
                 key={e.id}
                 event={e}
+                anchorId={`timeline-event-${e.id}`}
                 onClick={onEventClick}
                 onVote={onVote}
                 onPropose={onPropose}

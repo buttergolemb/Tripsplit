@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Link, useParams } from "react-router";
-import { ArrowLeft, Plus, Calendar, MapPin, Clock, X } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { Link, useParams, useSearchParams } from "react-router";
+import { ArrowLeft, Plus, Calendar, MapPin, Clock } from "lucide-react";
+import { motion } from "motion/react";
 import { EventCard } from './timeline/EventCard';
 import { EventDetail } from './timeline/EventDetail';
 import { ProposalSheet } from './timeline/ProposalSheet';
@@ -12,6 +12,8 @@ import { TimelineSpine } from './timeline/TimelineSpine';
 
 import { SuggestionTray } from './SuggestionTray';
 import { HorizontalDragScroll } from './HorizontalDragScroll';
+import { BottomSheet } from "./BottomSheet";
+import { getPreferredTimelineDayNumber } from "../../lib/tripLiveDay";
 
 // ─── Add Day Sheet ──────────────────────────────────────────────────────────
 
@@ -23,7 +25,8 @@ function AddDaySheet({ isOpen, onClose, onSubmit, nextDayNumber }: {
   const [date, setDate] = useState("");
   const [label, setLabel] = useState("");
 
-  const handleSubmit = () => {
+  const handleSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (!date.trim()) return;
     onSubmit({ date: date.trim(), label: label.trim() || `Day ${nextDayNumber}` });
     setDate("");
@@ -31,75 +34,47 @@ function AddDaySheet({ isOpen, onClose, onSubmit, nextDayNumber }: {
     onClose();
   };
 
-  if (!isOpen) return null;
-
   return (
-    <>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[60]"
-        onClick={onClose}
-      />
-      <motion.div
-        initial={{ y: "100%", opacity: 0.5 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: "100%", opacity: 0 }}
-        transition={{ type: "spring", damping: 28, stiffness: 220 }}
-        className="fixed inset-x-0 bottom-0 z-[60] bg-white rounded-t-[28px] shadow-[var(--shadow-apple-3)] max-w-lg mx-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Handle */}
-        <div className="pt-3 pb-0">
-          <div className="w-9 h-[5px] rounded-full bg-[#E5E5EA] mx-auto" />
+    <BottomSheet
+      open={isOpen}
+      onOpenChange={(open) => { if (!open) onClose(); }}
+      title="Add Day"
+      subtitle={`Day ${nextDayNumber} of your trip`}
+      srDescription="Add a new day to your trip timeline."
+    >
+      <form onSubmit={handleSubmit} className="flex flex-col space-y-4 pb-2">
+        <div>
+          <label className="text-[12px] font-semibold text-[#8E8E93] uppercase tracking-wider mb-2 block">Date</label>
+          <input
+            type="text"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            placeholder="e.g., Apr 5"
+            className="w-full px-4 py-3 bg-[#F7F7F5] rounded-[14px] text-[15px] text-[#1C1C1E] placeholder-[#C7C7CC] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20"
+          />
         </div>
-        {/* Header — unified tray shell */}
-        <div className="px-5 pt-4 pb-3 flex items-start justify-between">
-          <div>
-            <h3 className="text-[20px] font-semibold text-[#1C1C1E] leading-snug">Add Day</h3>
-            <p className="text-[13px] text-[#8E8E93] font-medium mt-0.5">Day {nextDayNumber} of your trip</p>
-          </div>
-          <button onClick={onClose} className="size-8 bg-[#F1F2F5] rounded-full flex items-center justify-center flex-shrink-0 ml-3 mt-0.5 hover:bg-[#E5E5EA] transition-colors">
-            <X className="size-4 text-[#8E8E93]" />
-          </button>
+        <div>
+          <label className="text-[12px] font-semibold text-[#8E8E93] uppercase tracking-wider mb-2 block">
+            Label <span className="font-normal text-[#C7C7CC] normal-case tracking-normal">optional</span>
+          </label>
+          <input
+            type="text"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="e.g., Arrival, Beach Day, Departure"
+            className="w-full px-4 py-3 bg-[#F7F7F5] rounded-[14px] text-[15px] text-[#1C1C1E] placeholder-[#C7C7CC] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20"
+          />
         </div>
 
-        <div className="px-5 pb-8 space-y-4">
-          <div>
-            <label className="text-[12px] font-semibold text-[#8E8E93] uppercase tracking-wider mb-2 block">Date</label>
-            <input
-              type="text"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              placeholder="e.g., Apr 5"
-              className="w-full px-4 py-3 bg-[#F7F7F5] rounded-[14px] text-[15px] text-[#1C1C1E] placeholder-[#C7C7CC] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20"
-            />
-          </div>
-          <div>
-            <label className="text-[12px] font-semibold text-[#8E8E93] uppercase tracking-wider mb-2 block">
-              Label <span className="font-normal text-[#C7C7CC] normal-case tracking-normal">optional</span>
-            </label>
-            <input
-              type="text"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder="e.g., Arrival, Beach Day, Departure"
-              className="w-full px-4 py-3 bg-[#F7F7F5] rounded-[14px] text-[15px] text-[#1C1C1E] placeholder-[#C7C7CC] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20"
-              onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
-            />
-          </div>
-
-          <button
-            onClick={handleSubmit}
-            disabled={!date.trim()}
-            className="w-full py-[14px] bg-[#007AFF] text-white rounded-[14px] font-semibold text-[17px] shadow-[0_4px_12px_rgba(0,122,255,0.25)] active:scale-[0.98] transition-all disabled:opacity-40"
-          >
-            Add Day {nextDayNumber}
-          </button>
-        </div>
-      </motion.div>
-    </>
+        <button
+          type="submit"
+          disabled={!date.trim()}
+          className="w-full py-[15px] bg-[#007AFF] text-white rounded-[14px] font-semibold text-[17px] shadow-[0_4px_16px_rgba(0,122,255,0.30)] active:scale-[0.98] transition-all disabled:opacity-40 disabled:shadow-none"
+        >
+          Add Day {nextDayNumber}
+        </button>
+      </form>
+    </BottomSheet>
   );
 }
 
@@ -107,10 +82,13 @@ function AddDaySheet({ isOpen, onClose, onSubmit, nextDayNumber }: {
 
 export default function Timeline() {
   const { tripId } = useParams();
+  const [searchParams] = useSearchParams();
+  const dayParam = searchParams.get("day");
+  const eventParam = searchParams.get("event");
   const { trip, addDay, addEventToDay, voteOnEvent, updateEvent, removeEventFromDay } = useTripData();
 
   const days = trip.timeline;
-  const [selectedDayNum, setSelectedDayNum] = useState<number>(days.length > 0 ? days[0].dayNumber : 1);
+  const [selectedDayNum, setSelectedDayNum] = useState<number>(1);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [isProposalSheetOpen, setIsProposalSheetOpen] = useState(false);
   const [proposalContext, setProposalContext] = useState<{ dayLabel: string } | null>(null);
@@ -119,16 +97,53 @@ export default function Timeline() {
   const [suggestionTrayOpen, setSuggestionTrayOpen] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<Suggestion | null>(null);
 
-  // Keep the selected day stable across data updates; only reset when the
-  // currently selected day truly no longer exists.
+  const timelineBootRef = React.useRef(false);
+
+  React.useEffect(() => {
+    timelineBootRef.current = false;
+  }, [tripId]);
+
+  React.useEffect(() => {
+    if (days.length === 0) return;
+    const dn = dayParam ? parseInt(dayParam, 10) : NaN;
+    if (!Number.isNaN(dn) && days.some((d) => d.dayNumber === dn)) {
+      setSelectedDayNum(dn);
+      timelineBootRef.current = true;
+      return;
+    }
+    if (!timelineBootRef.current) {
+      setSelectedDayNum(getPreferredTimelineDayNumber(days, trip.phase));
+      timelineBootRef.current = true;
+      return;
+    }
+    setSelectedDayNum((prev) =>
+      days.some((d) => d.dayNumber === prev)
+        ? prev
+        : getPreferredTimelineDayNumber(days, trip.phase),
+    );
+  }, [days, dayParam, trip.phase]);
+
   React.useEffect(() => {
     if (days.length === 0) return;
     if (!days.some((d) => d.dayNumber === selectedDayNum)) {
-      setSelectedDayNum(days[0].dayNumber);
+      setSelectedDayNum(getPreferredTimelineDayNumber(days, trip.phase));
     }
-  }, [days, selectedDayNum]);
+  }, [days, selectedDayNum, trip.phase]);
 
   const activeDay = days.find(d => d.dayNumber === selectedDayNum) || days[0];
+
+  React.useEffect(() => {
+    if (!eventParam) return;
+    const day = days.find((d) => d.dayNumber === selectedDayNum);
+    if (!day?.events.some((e) => e.id === eventParam)) return;
+    const t = window.setTimeout(() => {
+      document.getElementById(`timeline-event-${eventParam}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 100);
+    return () => window.clearTimeout(t);
+  }, [eventParam, selectedDayNum, days]);
 
   const handleEventClick = (event: Event) => setSelectedEvent(event);
 
@@ -171,9 +186,8 @@ export default function Timeline() {
     setSelectedDayNum(nextNum);
   };
 
-  const handleAttendanceChange = (status: AttendanceStatus) => {
+  const handleAttendanceChange = (_status: AttendanceStatus) => {
     if (!selectedEvent) return;
-    console.log("Attendance changed to", status);
   };
 
   // ─── Empty State ──────────────────────────────────────────────────────────
@@ -301,16 +315,12 @@ export default function Timeline() {
           </motion.div>
         </div>
 
-        <AnimatePresence>
-          {showAddDay && (
-            <AddDaySheet
-              isOpen={showAddDay}
-              onClose={() => setShowAddDay(false)}
-              onSubmit={handleAddDay}
-              nextDayNumber={1}
-            />
-          )}
-        </AnimatePresence>
+        <AddDaySheet
+          isOpen={showAddDay}
+          onClose={() => setShowAddDay(false)}
+          onSubmit={handleAddDay}
+          nextDayNumber={1}
+        />
       </div>
     );
   }
@@ -487,6 +497,7 @@ export default function Timeline() {
 
       {/* Event Detail Overlay */}
       <EventDetail
+        tripId={tripId ?? ""}
         event={selectedEvent}
         onClose={() => setSelectedEvent(null)}
         onAttendanceChange={handleAttendanceChange}
@@ -539,16 +550,12 @@ export default function Timeline() {
       />
 
       {/* Add Day Sheet */}
-      <AnimatePresence>
-        {showAddDay && (
-          <AddDaySheet
-            isOpen={showAddDay}
-            onClose={() => setShowAddDay(false)}
-            onSubmit={handleAddDay}
-            nextDayNumber={days.length > 0 ? Math.max(...days.map(d => d.dayNumber)) + 1 : 1}
-          />
-        )}
-      </AnimatePresence>
+      <AddDaySheet
+        isOpen={showAddDay}
+        onClose={() => setShowAddDay(false)}
+        onSubmit={handleAddDay}
+        nextDayNumber={days.length > 0 ? Math.max(...days.map(d => d.dayNumber)) + 1 : 1}
+      />
     </div>
   );
 }

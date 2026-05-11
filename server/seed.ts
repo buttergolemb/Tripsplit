@@ -16,7 +16,7 @@ async function seedAustin() {
     id: "austin",
     name: "Austin Trip",
     emoji: "📍",
-    dates: "Mar 15–18, 2026",
+    dates: "May 9–12, 2026",
     destination: "Austin, TX",
     phase: "during",
   });
@@ -43,10 +43,11 @@ async function seedAustin() {
   };
 
   // ─── Days ──────────────────────────────────────────────────────────────
-  const day1 = await repo.addDay("austin", { id: "day-austin-1", dayNumber: 1, date: "Mar 15", label: "Arrival",   dayStartTime: "2:00 PM",  dayEndTime: "11:00 PM" });
-  const day2 = await repo.addDay("austin", { id: "day-austin-2", dayNumber: 2, date: "Mar 16", label: "Explore",   dayStartTime: "9:00 AM",  dayEndTime: "11:00 PM" });
-  const day3 = await repo.addDay("austin", { id: "day-austin-3", dayNumber: 3, date: "Mar 17", label: "Adventure", dayStartTime: "8:00 AM",  dayEndTime: "11:30 PM" });
-  const day4 = await repo.addDay("austin", { id: "day-austin-4", dayNumber: 4, date: "Mar 18", label: "Departure", dayStartTime: "9:00 AM",  dayEndTime: "5:00 PM"  });
+  // Narrative: "today" (Sun May 10, 2026) is Day 2 — Explore / Veracruz morning.
+  const day1 = await repo.addDay("austin", { id: "day-austin-1", dayNumber: 1, date: "May 9", label: "Arrival", dayStartTime: "2:00 PM", dayEndTime: "11:00 PM" });
+  const day2 = await repo.addDay("austin", { id: "day-austin-2", dayNumber: 2, date: "May 10", label: "Explore", dayStartTime: "9:00 AM", dayEndTime: "11:00 PM" });
+  const day3 = await repo.addDay("austin", { id: "day-austin-3", dayNumber: 3, date: "May 11", label: "Adventure", dayStartTime: "8:00 AM", dayEndTime: "11:30 PM" });
+  const day4 = await repo.addDay("austin", { id: "day-austin-4", dayNumber: 4, date: "May 12", label: "Departure", dayStartTime: "9:00 AM", dayEndTime: "5:00 PM" });
 
   // ─── Events ────────────────────────────────────────────────────────────
   await repo.addEvent(day1.id, { id: "e1", title: "Land at AUS",            time: "2:30 PM", endTime: "3:30 PM", emoji: "✈️", state: "confirmed", attendees: ["Sarah","Mike","Alex","Jordan"].map((n) => ({ memberId: memId(n), status: "going" })) });
@@ -81,15 +82,23 @@ async function seedAustin() {
     );
   }
 
+  // ─── Starter discussion (Breakfast at Veracruz) ──────────────────────────
+  await query(
+    `INSERT INTO event_discussion_posts (id, event_id, trip_id, member_id, body)
+     VALUES ($1, $2, $3, $4, $5)`,
+    ["disc-seed-e4", "e4", "austin", memId("Sarah"), "Should we make a reservation?"],
+  );
+
   // ─── Expenses ──────────────────────────────────────────────────────────
   // Keep the exact amounts/splits from the prototype so balances match.
-  await repo.createExpense("austin", { id: "exp1", description: "Airbnb (3 nights)",     category: "Lodging",    emoji: "🏠", amount: 540, paidBy: memId("Sarah"),  date: "Mar 15", confirmed: true,  splits: ["Sarah","Mike","Alex","Jordan","Taylor","Casey"].map((n) => ({ memberId: memId(n), share: 90 })) });
-  await repo.createExpense("austin", { id: "exp2", description: "Gas to Austin",         category: "Gas",        emoji: "⛽", amount: 68,  paidBy: memId("Mike"),   date: "Mar 15", confirmed: true,  splits: ["Sarah","Mike","Alex","Jordan"].map((n) => ({ memberId: memId(n), share: 17 })) });
-  await repo.createExpense("austin", { id: "exp3", description: "Franklin BBQ",          category: "Food",       emoji: "🍖", amount: 180, paidBy: memId("Sarah"),  date: "Mar 15", confirmed: true,  splits: ["Sarah","Mike","Alex","Jordan","Taylor","Casey"].map((n) => ({ memberId: memId(n), share: 30 })) });
-  await repo.createExpense("austin", { id: "exp4", description: "Torchy's Tacos",        category: "Food",       emoji: "🌮", amount: 92,  paidBy: memId("Alex"),   date: "Mar 16", confirmed: true,  splits: ["Sarah","Mike","Alex","Jordan"].map((n) => ({ memberId: memId(n), share: 23 })) });
-  await repo.createExpense("austin", { id: "exp5", description: "Gas Return",            category: "Gas",        emoji: "⛽", amount: 65,  paidBy: memId("Mike"),   date: "Mar 16", confirmed: true,  splits: ["Sarah","Mike","Alex","Jordan"].map((n) => ({ memberId: memId(n), share: 16.25 })) });
-  await repo.createExpense("austin", { id: "exp6", description: "6th Street Bar Crawl",  category: "Activities", emoji: "🎸", amount: 145, paidBy: memId("Jordan"), date: "Mar 17", confirmed: true,  splits: ["Sarah","Mike","Alex","Jordan"].map((n) => ({ memberId: memId(n), share: 36.25 })) });
-  await repo.createExpense("austin", { id: "exp7", description: "Snacks & Drinks",       category: "Other",      emoji: "🛒", amount: 42,  paidBy: memId("Taylor"), date: "Mar 17", confirmed: false, splits: ["Sarah","Mike","Alex","Jordan","Taylor","Casey"].map((n) => ({ memberId: memId(n), share: 7 })) });
+  await repo.createExpense("austin", { id: "exp1", description: "Airbnb (3 nights)", category: "Lodging", emoji: "🏠", amount: 540, paidBy: memId("Sarah"), date: "Sunday, May 9", confirmed: true, splits: ["Sarah","Mike","Alex","Jordan","Taylor","Casey"].map((n) => ({ memberId: memId(n), share: 90 })) });
+  await repo.createExpense("austin", { id: "exp2", description: "Gas to Austin", category: "Gas", emoji: "⛽", amount: 68, paidBy: memId("Mike"), date: "Saturday, May 9", confirmed: true, splits: ["Sarah","Mike","Alex","Jordan"].map((n) => ({ memberId: memId(n), share: 17 })) });
+  await repo.createExpense("austin", { id: "exp3", description: "Franklin BBQ", category: "Food", emoji: "🍖", amount: 180, paidBy: memId("Sarah"), date: "Saturday, May 9", confirmed: true, splits: ["Sarah","Mike","Alex","Jordan","Taylor","Casey"].map((n) => ({ memberId: memId(n), share: 30 })) });
+  await repo.createExpense("austin", { id: "exp4", description: "Torchy's Tacos", category: "Food", emoji: "🌮", amount: 92, paidBy: memId("Alex"), date: "Sunday, May 10", confirmed: true, splits: ["Sarah","Mike","Alex","Jordan"].map((n) => ({ memberId: memId(n), share: 23 })) });
+  await repo.createExpense("austin", { id: "exp5", description: "Gas Return", category: "Gas", emoji: "⛽", amount: 65, paidBy: memId("Mike"), date: "Monday, May 11", confirmed: true, splits: ["Sarah","Mike","Alex","Jordan"].map((n) => ({ memberId: memId(n), share: 16.25 })) });
+  await repo.createExpense("austin", { id: "exp6", description: "6th Street Bar Crawl", category: "Activities", emoji: "🎸", amount: 145, paidBy: memId("Jordan"), date: "Monday, May 11", confirmed: true, splits: ["Sarah","Mike","Alex","Jordan"].map((n) => ({ memberId: memId(n), share: 36.25 })) });
+  await repo.createExpense("austin", { id: "exp7", description: "Snacks & Drinks", category: "Other", emoji: "🛒", amount: 42, paidBy: memId("Taylor"), date: "Monday, May 11", confirmed: false, splits: ["Sarah","Mike","Alex","Jordan","Taylor","Casey"].map((n) => ({ memberId: memId(n), share: 7 })) });
+  await repo.createExpense("austin", { id: "exp8", description: "Zilker trail permits (prepaid)", category: "Activities", emoji: "🥾", amount: 48, paidBy: memId("Sarah"), date: "Tuesday, Mar 10", confirmed: true, splits: ["Sarah","Mike","Alex","Jordan"].map((n) => ({ memberId: memId(n), share: 12 })) });
 }
 
 async function seedBeach() {
@@ -110,6 +119,9 @@ async function main() {
   await applySchema();
   await seedAustin();
   await seedBeach();
+
+  // Drop any other trips (e.g. one-off test data) so only Austin + Beach remain.
+  await query(`DELETE FROM trips WHERE id NOT IN ('austin', 'beach')`);
 
   const trips = await repo.listTrips();
   const austinMembers = await repo.listMembers("austin");

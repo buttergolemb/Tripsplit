@@ -10,7 +10,8 @@ import { query, queryOne, tx, type Querier } from "./db";
 import { toCents, toDollars, boolFromInt } from "./util";
 import type {
   AttendanceStatus, AttendeeDTO, BalancesDTO, BudgetCategoryDTO,
-  DayScheduleDTO, DepositPolicyDTO, EventState, ExpenseDTO, ExpenseSplitDTO,
+  DayScheduleDTO, DepositPolicyDTO, EventDiscussionPostDTO, EventState,
+  ExpenseDTO, ExpenseSplitDTO,
   MemberBalanceDTO, MemberDTO, RSVPStatus, SettlementDTO, SuggestionDTO,
   TimelineEventDTO, TripDTO, TripPhase, TripRuleDTO, TripSummaryDTO,
 } from "./types";
@@ -95,7 +96,10 @@ const PREVIEW_LIMIT = 4;
 
 export async function listTrips(): Promise<TripSummaryDTO[]> {
   const trips = (await query<TripRow>(
-    `SELECT * FROM trips ORDER BY created_at DESC, id DESC`,
+    `SELECT * FROM trips
+       ORDER BY CASE id WHEN 'austin' THEN 0 WHEN 'beach' THEN 1 ELSE 2 END,
+                created_at DESC,
+                id DESC`,
   )).rows;
   if (trips.length === 0) return [];
 
@@ -628,6 +632,78 @@ export async function setAttendeeStatus(
      ON CONFLICT (event_id, member_id) DO UPDATE SET status = EXCLUDED.status`,
     [eventId, memberId, status],
   );
+}
+
+interface DiscussionRow {
+  id: string;
+  event_id: string;
+  member_id: string;
+  body: string;
+  created_at: Date | string;
+  author_name: string;
+}
+
+function mapDiscussionPost(r: DiscussionRow): EventDiscussionPostDTO {
+  const created =
+    r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at);
+  return {
+    id: r.id,
+    eventId: r.event_id,
+    memberId: r.member_id,
+    authorName: r.author_name,
+    body: r.body,
+    createdAt: created,
+  };
+}
+
+export async function listEventDiscussion(eventId: string): Promise<EventDiscussionPostDTO[]> {
+  const rows = (await query<DiscussionRow>(
+    `SELECT p.id, p.event_id, p.member_id, p.body, p.created_at, m.name AS author_name
+     FROM event_discussion_posts p
+     JOIN members m ON m.id = p.member_id
+     WHERE p.event_id = $1
+     ORDER BY p.created_at ASC`,
+    [eventId],
+  )).rows;
+  return rows.map(mapDiscussionPost);
+}
+
+export async function addEventDiscussionPost(
+  tripId: string,
+  eventId: string,
+  memberId: string,
+  body: string,
+): Promise<EventDiscussionPostDTO | null> {
+  const trimmed = body.trim();
+  if (!trimmed) return null;
+
+  const ev = await queryOne<{ trip_id: string }>(
+    `SELECT trip_id FROM timeline_events WHERE id = $1`,
+    [eventId],
+  );
+  if (!ev || ev.trip_id !== tripId) return null;
+
+  const mem = await queryOne<{ id: string }>(
+    `SELECT id FROM members WHERE id = $1 AND trip_id = $2`,
+    [memberId, tripId],
+  );
+  if (!mem) return null;
+
+  const id = `disc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+  await query(
+    `INSERT INTO event_discussion_posts (id, event_id, trip_id, member_id, body)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [id, eventId, tripId, memberId, trimmed],
+  );
+
+  const row = await queryOne<DiscussionRow>(
+    `SELECT p.id, p.event_id, p.member_id, p.body, p.created_at, m.name AS author_name
+     FROM event_discussion_posts p
+     JOIN members m ON m.id = p.member_id
+     WHERE p.id = $1`,
+    [id],
+  );
+  return row ? mapDiscussionPost(row) : null;
 }
 
 // ─── Budget categories ──────────────────────────────────────────────────────

@@ -1,9 +1,35 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, MapPin, Clock, DollarSign, ThumbsUp, ThumbsDown, Share2, MoreHorizontal, Send, AlignLeft, Pencil, Trash2, Check, X } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Event, AttendanceStatus } from './types';
+import { timelineApi } from "../../../lib/api";
+import { qk } from "../../../lib/queryKeys";
+import { useTripData } from "../TripDataContext";
+import { useCurrentUser } from "../../../lib/currentUser";
+import { useToast } from "../ToastHost";
+
+function formatDiscussionTime(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return "";
+  const sec = Math.floor((Date.now() - t) / 1000);
+  if (sec < 45) return "just now";
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+  const d = Math.floor(sec / 86400);
+  if (d === 1) return "yesterday";
+  if (d < 7) return `${d}d ago`;
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function avatarBgForName(name: string, palette: string[]): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
+  return palette[Math.abs(h) % palette.length];
+}
 
 interface EventDetailProps {
+  tripId: string;
   event: Event | null;
   onClose: () => void;
   onAttendanceChange: (status: AttendanceStatus) => void;
@@ -15,11 +41,46 @@ interface EventDetailProps {
 
 const avatarColors = ["bg-[#007AFF]", "bg-[#34C759]", "bg-[#FF9F0A]", "bg-[#AF52DE]", "bg-[#FF6482]", "bg-[#5AC8FA]"];
 
-export function EventDetail({ event, onClose, onAttendanceChange, onVote, onEdit, onDelete }: EventDetailProps) {
+export function EventDetail({ tripId, event, onClose, onAttendanceChange, onVote, onEdit, onDelete }: EventDetailProps) {
   const [activeAttendance, setActiveAttendance] = React.useState<AttendanceStatus>('going');
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [editing, setEditing] = React.useState(false);
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
+  const [commentDraft, setCommentDraft] = React.useState("");
+  const [discussionExpanded, setDiscussionExpanded] = React.useState(false);
+
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const { trip } = useTripData();
+  const [currentUserName] = useCurrentUser();
+  const posterMemberId = React.useMemo(() => {
+    const hit = trip.participants.find((p) => p.name === currentUserName);
+    return hit?.id ?? trip.participants[0]?.id ?? "";
+  }, [trip.participants, currentUserName]);
+
+  const discussionQuery = useQuery({
+    queryKey: qk.eventDiscussion(tripId, event?.id ?? "_"),
+    queryFn: () => timelineApi.listDiscussion(tripId, event!.id),
+    enabled: !!tripId && !!event?.id,
+  });
+
+  const postMut = useMutation({
+    mutationFn: (body: string) =>
+      timelineApi.postDiscussion(tripId, event!.id, { memberId: posterMemberId, body }),
+    onSuccess: async () => {
+      if (tripId && event?.id) {
+        await queryClient.invalidateQueries({ queryKey: qk.eventDiscussion(tripId, event.id) });
+      }
+      setCommentDraft("");
+    },
+    onError: (err) => {
+      toast.push({
+        tone: "error",
+        title: "Couldn't send message",
+        description: err instanceof Error ? err.message : "Please try again.",
+      });
+    },
+  });
 
   // Local drafts; reset whenever the event changes.
   const [draftTitle, setDraftTitle] = React.useState(event?.title ?? '');
@@ -55,6 +116,8 @@ export function EventDetail({ event, onClose, onAttendanceChange, onVote, onEdit
     setEditing(false);
     setConfirmingDelete(false);
     setMenuOpen(false);
+    setCommentDraft("");
+    setDiscussionExpanded(false);
   }, [event?.id]);
 
   if (!event) return null;
@@ -388,28 +451,82 @@ export function EventDetail({ event, onClose, onAttendanceChange, onVote, onEdit
             <div className="bg-white rounded-[18px] p-5 shadow-[var(--shadow-apple-1)]">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-[12px] font-semibold text-[#8E8E93] uppercase tracking-wider">Discussion</h3>
-                <button className="text-[12px] font-semibold text-[#007AFF]">View All</button>
+                <button
+                  type="button"
+                  onClick={() => setDiscussionExpanded((v) => !v)}
+                  className="text-[12px] font-semibold text-[#007AFF]"
+                >
+                  {discussionExpanded ? "Show less" : "View All"}
+                </button>
               </div>
-              
-              <div className="bg-[#F7F7F5] rounded-[12px] p-3 mb-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="size-5 rounded-full bg-[#007AFF] flex items-center justify-center text-[8px] font-bold text-white">S</div>
-                  <span className="text-[12px] font-semibold text-[#1C1C1E]">Sarah</span>
-                  <span className="text-[10px] text-[#C7C7CC]">2h ago</span>
-                </div>
-                <p className="text-[14px] text-[#3C3C43] pl-7">Should we make a reservation?</p>
+
+              <div
+                className={`space-y-2 mb-3 transition-[max-height] duration-200 ${
+                  discussionExpanded
+                    ? "max-h-[min(52vh,360px)] overflow-y-auto overscroll-contain"
+                    : "max-h-[148px] overflow-y-auto overscroll-contain"
+                }`}
+              >
+                {discussionQuery.isLoading && (
+                  <div className="space-y-2">
+                    <div className="h-14 rounded-[12px] bg-[#F7F7F5] animate-pulse" />
+                    <div className="h-14 rounded-[12px] bg-[#F7F7F5] animate-pulse w-4/5" />
+                  </div>
+                )}
+                {discussionQuery.isError && (
+                  <p className="text-[13px] text-[#FF3B30] py-2">Couldn&apos;t load discussion.</p>
+                )}
+                {!discussionQuery.isLoading &&
+                  !discussionQuery.isError &&
+                  (discussionQuery.data?.length ?? 0) === 0 && (
+                    <p className="text-[13px] text-[#8E8E93] py-1">No messages yet — start the thread.</p>
+                  )}
+                {!discussionQuery.isLoading &&
+                  discussionQuery.data?.map((post) => (
+                    <div key={post.id} className="bg-[#F7F7F5] rounded-[12px] p-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div
+                          className={`size-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white ${avatarBgForName(
+                            post.authorName,
+                            avatarColors,
+                          )}`}
+                        >
+                          {(post.authorName[0] ?? "?").toUpperCase()}
+                        </div>
+                        <span className="text-[12px] font-semibold text-[#1C1C1E]">{post.authorName}</span>
+                        <span className="text-[10px] text-[#C7C7CC]">{formatDiscussionTime(post.createdAt)}</span>
+                      </div>
+                      <p className="text-[14px] text-[#3C3C43] pl-7 whitespace-pre-wrap break-words">{post.body}</p>
+                    </div>
+                  ))}
               </div>
 
               <div className="flex gap-2">
-                <input 
-                  type="text" 
-                  placeholder="Add a comment..." 
+                <input
+                  type="text"
+                  value={commentDraft}
+                  onChange={(e) => setCommentDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      const t = commentDraft.trim();
+                      if (t && posterMemberId && tripId && !postMut.isPending) postMut.mutate(t);
+                    }
+                  }}
+                  placeholder={posterMemberId ? "Add a comment..." : "Join this trip to comment"}
+                  disabled={!posterMemberId || postMut.isPending || !tripId}
                   aria-label="Add a comment"
-                  className="flex-1 bg-[#F7F7F5] rounded-[10px] px-3 py-2.5 text-[14px] text-[#1C1C1E] placeholder-[#C7C7CC] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/15 transition-shadow"
+                  className="flex-1 bg-[#F7F7F5] rounded-[10px] px-3 py-2.5 text-[14px] text-[#1C1C1E] placeholder-[#C7C7CC] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/15 transition-shadow disabled:opacity-50"
                 />
                 <button
+                  type="button"
                   aria-label="Send comment"
-                  className="size-10 bg-[#007AFF] text-white rounded-[10px] flex items-center justify-center hover:bg-[#0064D2] transition-colors flex-shrink-0"
+                  disabled={!commentDraft.trim() || !posterMemberId || postMut.isPending || !tripId}
+                  onClick={() => {
+                    const t = commentDraft.trim();
+                    if (t && posterMemberId && tripId) postMut.mutate(t);
+                  }}
+                  className="size-10 bg-[#007AFF] text-white rounded-[10px] flex items-center justify-center hover:bg-[#0064D2] transition-colors flex-shrink-0 disabled:opacity-40 disabled:pointer-events-none"
                 >
                   <Send className="size-4" />
                 </button>

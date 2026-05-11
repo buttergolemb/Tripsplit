@@ -7,4 +7,6 @@ export const qk = {
   balances: (tripId: string) => ["trips", tripId, "balances"] as const,
   expenses: (tripId: string) => ["trips", tripId, "expenses"] as const,
   timeline: (tripId: string) => ["trips", tripId, "timeline"] as const,
+  eventDiscussion: (tripId: string, eventId: string) =>
+    ["trips", tripId, "events", eventId, "discussion"] as const,
 };

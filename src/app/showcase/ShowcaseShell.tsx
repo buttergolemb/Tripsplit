@@ -22,8 +22,6 @@ import {
   Wallet,
   ClipboardList,
   Settings,
-  FlaskConical,
-  Layers,
 } from "lucide-react";
 import { noteForHash, stripHash } from "./notes";
 
@@ -60,14 +58,6 @@ const directory: DirectorySection[] = [
       { label: "Money", href: "#/trip/austin/money", icon: Wallet, nested: true },
       { label: "Planning", href: "#/trip/austin/planning", icon: ClipboardList, nested: true },
       { label: "Settings", href: "#/trip/austin/settings", icon: Settings, nested: true },
-    ],
-  },
-  {
-    title: "Component playgrounds",
-    caption: "Isolated harnesses used while iterating",
-    items: [
-      { label: "Trip card test", href: "#/card-test", icon: Layers },
-      { label: "Tray / sheet lab", href: "#/tray-lab", icon: FlaskConical },
     ],
   },
 ];

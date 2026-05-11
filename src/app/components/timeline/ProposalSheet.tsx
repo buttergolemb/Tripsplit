@@ -162,19 +162,12 @@ export function ProposalSheet({ isOpen, onClose, dayLabel, onSubmit }: ProposalS
           </div>
         </div>
 
-        {/* ── Sticky footer ───────────────────────────────────────────────── */}
-        <div className="pt-5 pb-1 flex gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 py-[14px] rounded-[14px] font-semibold text-[#8E8E93] bg-[#F7F7F5] active:scale-[0.98] transition-all"
-          >
-            Cancel
-          </button>
+        {/* ── Footer (single primary CTA — matches expense sheet) ─────────── */}
+        <div className="pt-5 pb-1">
           <button
             type="submit"
             disabled={!canSubmit}
-            className="flex-[2] bg-[#007AFF] text-white py-[14px] rounded-[14px] font-semibold shadow-[0_4px_12px_rgba(0,122,255,0.25)] disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none transition-all active:scale-[0.98]"
+            className="w-full bg-[#007AFF] text-white py-[15px] rounded-[14px] font-semibold text-[17px] shadow-[0_4px_16px_rgba(0,122,255,0.30)] disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none transition-all active:scale-[0.98]"
           >
             Propose Activity
           </button>
