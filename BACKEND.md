@@ -8,15 +8,15 @@ production-grade service.
 
 | Layer       | Choice                                   | Why                                              |
 |-------------|------------------------------------------|--------------------------------------------------|
-| Runtime     | Node.js + **Express 4**                  | Tiny, universally understood, no magic           |
-| Database    | **SQLite** via `better-sqlite3`          | Single file, synchronous, Windows prebuilds      |
+| Runtime     | Node.js + **Express 5**                  | Tiny, universally understood, no magic           |
+| Database    | **PostgreSQL** via `pg`                  | Hosted-friendly (Render/Neon/Supabase/Railway)   |
 | Validation  | **Zod**                                  | Runtime body validation + shared TypeScript types|
 | Client fetch| **TanStack Query**                       | Caching, invalidation, retries, loading state    |
 | Dev orchestration | `concurrently`, Vite `/api` proxy   | `npm run dev` runs API + UI together             |
 
-No cloud setup required. When it's time to ship, the schema is plain SQL and
-ports cleanly to Postgres (Supabase, Neon, Railway, etc.) — swap the
-`better-sqlite3` calls for `pg` and keep everything else.
+The repo layer is fully async — every query goes through `query` /
+`queryOne` / `tx` helpers in `server/db.ts`, which wrap a single `pg.Pool`
+connection.
 
 ## Running it
 
@@ -24,7 +24,11 @@ ports cleanly to Postgres (Supabase, Neon, Railway, etc.) — swap the
 # Install deps (first time only)
 npm install
 
-# Populate SQLite with prototype data (Austin + Beach trips)
+# Configure the database (copy + edit)
+cp .env.example .env
+
+# Populate Postgres with prototype data (Austin + Beach trips). Schema is
+# applied automatically before seeding.
 npm run seed
 
 # Start API (port 4000) + Vite (port 5173) together
@@ -37,8 +41,8 @@ Other scripts:
 - `npm run dev:web` — Vite only
 - `npm run build` — production build
 
-The SQLite file lives at `data.sqlite` in the project root. Delete it +
-`npm run seed` to reset state.
+The schema is applied on every API boot, so `DROP DATABASE … CREATE
+DATABASE …` followed by `npm run seed` is the canonical way to reset state.
 
 ## Project layout
 

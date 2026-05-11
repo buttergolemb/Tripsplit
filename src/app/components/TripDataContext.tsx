@@ -23,7 +23,8 @@ import { useToast } from "./ToastHost";
 // We keep them stable so TripDashboard/Timeline/MoneyScreen/PlanningPhase/
 // TripSettings keep working with no changes.
 
-export type RSVPStatus = "committed" | "likely" | "interested" | "declined";
+export type RSVPStatus =
+  | "committed" | "likely" | "interested" | "declined" | "pending";
 export type TripPhase = "planning" | "pre-trip" | "during" | "post-trip" | "complete";
 
 export type Participant = {

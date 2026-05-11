@@ -2,7 +2,8 @@
 // Imported by both the server (to shape responses) and the frontend (to type
 // API calls). Money is always *dollars* at the boundary; DB stores cents.
 
-export type RSVPStatus = "committed" | "likely" | "interested" | "declined";
+export type RSVPStatus =
+  | "committed" | "likely" | "interested" | "declined" | "pending";
 export type TripPhase = "planning" | "pre-trip" | "during" | "post-trip" | "complete";
 export type EventState = "proposed" | "voting" | "confirmed" | "freetime";
 export type AttendanceStatus = "going" | "maybe" | "declined";
