@@ -139,7 +139,7 @@ export default function MoneyScreen() {
   // Store only the id — the sheet resolves the live expense from trip data
   // every render so mutations (pay, edit) flow straight through.
   const [selectedExpenseId, setSelectedExpenseId] = React.useState<string | null>(null);
-  const [showSummary, setShowSummary] = React.useState(false);
+  // showSummary removed — "Who's Paid What" section was removed.
   const [toast, setToast] = React.useState<{ emoji: string; description: string; amount: string } | null>(null);
 
   const selectedExpense: Expense | null = React.useMemo(
@@ -164,15 +164,11 @@ export default function MoneyScreen() {
     );
   }
 
-  const participantNames = trip.participants.map((p) => p.name);
   const confirmedExpenses = trip.expenses.filter((e) => e.confirmed);
   const unconfirmedExpenses = trip.expenses.filter((e) => !e.confirmed);
   const tripTotal = confirmedExpenses.reduce((s, e) => s + e.amount, 0);
-  const perPerson = participantNames.length > 0 ? tripTotal / participantNames.length : 0;
 
-  // Personal POV metrics — everything below is framed around "me", the
-  // signed-in user (YOU). Group-wide totals stay available for the expandable
-  // "Who's Paid What" section but don't dominate the page.
+  // Personal POV metrics — framed around "me" (Sarah).
   const youSpent = confirmedExpenses
     .filter((e) => e.paidBy === YOU_NAME)
     .reduce((s, e) => s + e.amount, 0);
@@ -195,28 +191,7 @@ export default function MoneyScreen() {
       return sum;
     }, 0);
 
-  const youNet = othersOweYou - youOweTotal; // +ve = net into your pocket
-
-  // Pairwise balances between YOU and each other member, derived from
-  // expense splits rather than the server-side greedy settlements (the user
-  // wants "Sarah owes me $X" scoped to this person, not round-trip reshuffles).
-  const personalPairs = trip.participants
-    .filter((p) => p.name !== YOU_NAME)
-    .map((p) => {
-      let net = 0;
-      for (const e of confirmedExpenses) {
-        if (e.paidBy === YOU_NAME) {
-          const s = e.splitWith.find((x) => x.name === p.name);
-          if (s && !s.paid) net += s.share; // they owe me
-        } else if (e.paidBy === p.name) {
-          const s = e.splitWith.find((x) => x.name === YOU_NAME);
-          if (s && !s.paid) net -= s.share; // I owe them
-        }
-      }
-      return { name: p.name, memberId: p.id, net };
-    })
-    .filter((b) => Math.abs(b.net) >= 0.01)
-    .sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
+  const youNet = othersOweYou - youOweTotal;
 
   // Payment-settlement progress across the whole trip.
   let totalPaymentSlots = 0;
@@ -235,24 +210,6 @@ export default function MoneyScreen() {
     toggleSplitPaid(expense.id, split.memberId, !split.paid);
   };
 
-  // Mark every unpaid split between YOU and `memberName` as paid in one go.
-  // - If they owe you: mark their splits across all expenses you paid as paid.
-  // - If you owe them: mark your splits across all expenses they paid as paid.
-  // Either way, this clears the entire pairwise debt.
-  const [pendingSettle, setPendingSettle] = React.useState<string | null>(null);
-  const settleAllWith = (memberName: string) => {
-    for (const e of confirmedExpenses) {
-      if (e.paidBy === YOU_NAME) {
-        const split = e.splitWith.find((s) => s.name === memberName && !s.paid);
-        if (split) toggleSplitPaid(e.id, split.memberId, true);
-      } else if (e.paidBy === memberName) {
-        const yours = e.splitWith.find((s) => s.name === YOU_NAME && !s.paid);
-        if (yours) toggleSplitPaid(e.id, yours.memberId, true);
-      }
-    }
-    setPendingSettle(null);
-  };
-
   const getExpensePaidCount = (expense: Expense) => {
     const owes = expense.splitWith.filter((s) => s.name !== expense.paidBy);
     const paid = owes.filter((s) => s.paid).length;
@@ -264,19 +221,6 @@ export default function MoneyScreen() {
     const key = expense.date || "Undated";
     (expensesByDate[key] ??= []).push(expense);
   }
-
-  // Per-person "paid vs fair share" breakdown used by the collapsible
-  // "Who's Paid What" card. Net = paid − owed; positive means the trip
-  // currently owes this person money.
-  const personBalances = trip.participants.map((p) => {
-    const paid = confirmedExpenses
-      .filter((e) => e.paidBy === p.name)
-      .reduce((s, e) => s + e.amount, 0);
-    const owed = confirmedExpenses
-      .flatMap((e) => e.splitWith.filter((s) => s.name === p.name))
-      .reduce((s, x) => s + x.share, 0);
-    return { memberId: p.id, name: p.name, paid, owed, net: paid - owed };
-  });
 
   const handleExpenseSaved = (info: ExpenseSavePayload) => {
     const amountNum = parseFloat(info.amount);
@@ -604,170 +548,13 @@ export default function MoneyScreen() {
           );
         })}
 
-        {/* Spending by Category */}
-        {confirmedExpenses.length > 0 && (
-          <CategoryBreakdown expenses={confirmedExpenses} />
+        {/* Spending by Category — Sarah's own paid expenses only */}
+        {confirmedExpenses.some((e) => e.paidBy === YOU_NAME) && (
+          <CategoryBreakdown
+            expenses={confirmedExpenses.filter((e) => e.paidBy === YOU_NAME)}
+            label="My Spending by Category"
+          />
         )}
-
-        {/* Who's Paid What */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-        >
-          <button
-            onClick={() => setShowSummary(!showSummary)}
-            className="w-full bg-white rounded-[18px] p-4 text-left shadow-[var(--shadow-apple-1)] active:scale-[0.99]"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-[15px] font-semibold text-[#1C1C1E]">Who's Paid What</h3>
-                <p className="text-[12px] text-[#8E8E93] mt-0.5">
-                  ${tripTotal.toFixed(0)} total · ${perPerson.toFixed(0)}/person fair share
-                </p>
-              </div>
-              <ChevronDown className={`size-4 text-[#C7C7CC] transition-transform ${showSummary ? "rotate-180" : ""}`} />
-            </div>
-          </button>
-
-          <AnimatePresence>
-            {showSummary && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="pt-3 space-y-2">
-                  {[...personBalances]
-                    .sort((a, b) => (b.net ?? 0) - (a.net ?? 0))
-                    .map((person) => (
-                      <div
-                        key={person.memberId}
-                        className="bg-white rounded-[14px] p-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.03)] flex items-center justify-between"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`size-8 rounded-full flex items-center justify-center text-white text-[11px] font-semibold ${avatarColors[person.name[0]] || "bg-[#8E8E93]"}`}>
-                            {person.name[0]}
-                          </div>
-                          <div>
-                            <p className="text-[14px] font-medium text-[#1C1C1E]">{person.name}</p>
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-[11px] text-[#8E8E93]">Paid ${person.paid.toFixed(0)}</p>
-                              {paymentPreferences[person.name] && (
-                                <>
-                                  <span className="text-[#D1D1D6]">·</span>
-                                  <p className={`text-[11px] font-medium ${paymentMethodColors[paymentPreferences[person.name].method] || "text-[#8E8E93]"}`}>
-                                    {paymentPreferences[person.name].method}
-                                  </p>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <span className={`text-[15px] font-semibold ${(person.net ?? 0) > 0 ? "text-[#34C759]" : (person.net ?? 0) < 0 ? "text-[#FF9F0A]" : "text-[#8E8E93]"}`}>
-                          {(person.net ?? 0) > 0 ? "+" : ""}
-                          {Math.abs(person.net ?? 0) < 0.01 ? "Even" : `$${Math.abs(person.net ?? 0).toFixed(0)}`}
-                        </span>
-                      </div>
-                    ))}
-                </div>
-                {personalPairs.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-[#F1F2F5]">
-                    <p className="text-[11px] font-semibold text-[#8E8E93] uppercase tracking-wider mb-2 px-1">
-                      Between You and Others
-                    </p>
-                    <div className="space-y-1.5">
-                      {personalPairs.map((pair) => {
-                        const theyOweMe = pair.net > 0;
-                        const amount = Math.abs(pair.net).toFixed(2);
-                        const isPending = pendingSettle === pair.name;
-                        return (
-                          <div
-                            key={pair.memberId}
-                            className="bg-white rounded-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.03)] overflow-hidden"
-                          >
-                            <div className="flex items-center justify-between px-3 py-2">
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                <div className={`size-7 rounded-full flex items-center justify-center text-white text-[10px] font-semibold flex-shrink-0 ${avatarColors[pair.name[0]] || "bg-[#8E8E93]"}`}>
-                                  {pair.name[0]}
-                                </div>
-                                <p className="text-[13px] text-[#1C1C1E] truncate">
-                                  {theyOweMe ? (
-                                    <><span className="font-semibold">{pair.name}</span> owes me</>
-                                  ) : (
-                                    <>I owe <span className="font-semibold">{pair.name}</span></>
-                                  )}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                                <span className={`text-[14px] font-semibold ${theyOweMe ? "text-[#34C759]" : "text-[#FF9F0A]"}`}>
-                                  ${amount}
-                                </span>
-                                <motion.button
-                                  whileTap={{ scale: 0.94 }}
-                                  onClick={(e) => { e.stopPropagation(); setPendingSettle(isPending ? null : pair.name); }}
-                                  className={`text-[11px] font-semibold px-2.5 py-1 rounded-full transition-colors ${
-                                    isPending ? "bg-[#FF9F0A] text-white" : "bg-[#EAF2FF] text-[#007AFF]"
-                                  }`}
-                                >
-                                  {isPending ? "Cancel" : "Settle"}
-                                </motion.button>
-                              </div>
-                            </div>
-                            <AnimatePresence>
-                              {isPending && (
-                                <motion.div
-                                  initial={{ height: 0, opacity: 0 }}
-                                  animate={{ height: "auto", opacity: 1 }}
-                                  exit={{ height: 0, opacity: 0 }}
-                                  transition={{ duration: 0.18 }}
-                                  className="overflow-hidden"
-                                >
-                                  <div className="px-3 pb-2.5 pt-0">
-                                    <p className="text-[11px] text-[#6E6E73] mb-2 leading-snug">
-                                      {theyOweMe
-                                        ? `Mark $${amount} as received from ${pair.name}? This clears every split between you.`
-                                        : `Mark $${amount} as paid to ${pair.name}? This clears every split between you.`}
-                                    </p>
-                                    <div className="flex items-center gap-2">
-                                      <button
-                                        onClick={(e) => { e.stopPropagation(); setPendingSettle(null); }}
-                                        className="flex-1 h-8 rounded-[10px] bg-[#F1F2F5] text-[#1C1C1E] text-[12px] font-semibold active:scale-[0.97] transition-transform"
-                                      >
-                                        Cancel
-                                      </button>
-                                      <motion.button
-                                        whileTap={{ scale: 0.97 }}
-                                        onClick={(e) => { e.stopPropagation(); settleAllWith(pair.name); }}
-                                        className="flex-1 h-8 rounded-[10px] bg-[#34C759] text-white text-[12px] font-semibold shadow-[0_2px_8px_rgba(52,199,89,0.3)]"
-                                      >
-                                        ✓ Mark settled
-                                      </motion.button>
-                                    </div>
-                                  </div>
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                <div className="bg-[#EAF2FF] rounded-[14px] p-3.5 mt-3">
-                  <p className="text-[12px] font-semibold text-[#1C1C1E] mb-0.5">
-                    Tap any expense to settle up
-                  </p>
-                  <p className="text-[11px] text-[#6E6E73]">
-                    Balances update live as payments are marked paid.
-                  </p>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.div>
       </div>
 
       {/* FAB */}
@@ -1205,7 +992,7 @@ const CATEGORY_BAR_COLORS = [
   "#FFD60A", // yellow
 ];
 
-function CategoryBreakdown({ expenses }: { expenses: Expense[] }) {
+function CategoryBreakdown({ expenses, label = "Spending by Category" }: { expenses: Expense[]; label?: string }) {
   // Strip the leading emoji from "🍕 Food" → "Food"; keep the emoji separately.
   const buckets = React.useMemo(() => {
     const map = new Map<string, { name: string; emoji: string; total: number }>();
@@ -1234,8 +1021,8 @@ function CategoryBreakdown({ expenses }: { expenses: Expense[] }) {
       className="bg-white rounded-[18px] p-4 shadow-[var(--shadow-apple-1)]"
     >
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-[15px] font-semibold text-[#1C1C1E]">Spending by Category</h3>
-        <span className="text-[12px] text-[#8E8E93]">${grandTotal.toFixed(0)} total</span>
+        <h3 className="text-[15px] font-semibold text-[#1C1C1E]">{label}</h3>
+        <span className="text-[12px] text-[#8E8E93]">${grandTotal.toFixed(0)} paid</span>
       </div>
 
       {/* Stacked progress bar */}
