@@ -94,7 +94,6 @@ export function ProposalSheet({ isOpen, onClose, dayLabel, onSubmit }: ProposalS
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Dinner at Franklin BBQ"
               className="w-full bg-[#F7F7F5] rounded-[14px] px-4 py-3 text-[15px] text-[#1C1C1E] placeholder:text-[#C7C7CC] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20"
-              autoFocus
             />
           </div>
 

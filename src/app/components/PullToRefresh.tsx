@@ -125,6 +125,7 @@ export function PullToRefresh({
 
       <div
         ref={scrollRef}
+        data-trip-scroller
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endGesture}

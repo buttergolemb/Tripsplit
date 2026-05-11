@@ -51,6 +51,34 @@ export function BottomSheet({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onOpenChange]);
 
+  // Pin the parent's scroll position while the sheet is open. Some inputs
+  // inside trays (autoFocus, .focus()) cause the browser to scroll their
+  // ancestors trying to bring the input into view — even though the sheet is
+  // a fixed-position overlay. That manifests as the timeline visibly jumping
+  // back to the top behind the tray. We capture scrollTop on open and clamp
+  // it back for ~600ms if anything moves it.
+  React.useEffect(() => {
+    if (!open) return;
+    const scroller =
+      document.querySelector<HTMLElement>("[data-trip-scroller]") ||
+      findScrollableAncestor(document.activeElement);
+    if (!scroller) return;
+    const saved = scroller.scrollTop;
+    let raf = 0;
+    const tick = () => {
+      if (scroller.scrollTop !== saved) {
+        scroller.scrollTop = saved;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    const stop = window.setTimeout(() => cancelAnimationFrame(raf), 600);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(stop);
+    };
+  }, [open]);
+
   return (
     <AnimatePresence>
       {open && (
@@ -120,4 +148,23 @@ export function BottomSheet({
       )}
     </AnimatePresence>
   );
+}
+
+// Walk up the DOM from `el` to find the closest ancestor that is a vertical
+// scroller (overflow: auto/scroll, with content actually overflowing). Falls
+// back to `null` so the caller can pick another sensible default.
+function findScrollableAncestor(el: Element | null): HTMLElement | null {
+  let node: HTMLElement | null = (el as HTMLElement | null) ?? null;
+  while (node && node !== document.body) {
+    const style = window.getComputedStyle(node);
+    const overflowY = style.overflowY;
+    if (
+      (overflowY === "auto" || overflowY === "scroll") &&
+      node.scrollHeight > node.clientHeight
+    ) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return null;
 }

@@ -73,7 +73,6 @@ function AddDaySheet({ isOpen, onClose, onSubmit, nextDayNumber }: {
               value={date}
               onChange={(e) => setDate(e.target.value)}
               placeholder="e.g., Apr 5"
-              autoFocus
               className="w-full px-4 py-3 bg-[#F7F7F5] rounded-[14px] text-[15px] text-[#1C1C1E] placeholder-[#C7C7CC] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20"
             />
           </div>

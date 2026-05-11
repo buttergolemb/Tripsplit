@@ -109,10 +109,16 @@ export function SuggestionTray({
     }
   }, [suggestion, isOpen]);
 
-  // Focus time input after autofill since time is the main missing field
+  // Focus time input after autofill since time is the main missing field.
+  // `preventScroll` keeps the timeline's scroll position pinned — without it
+  // the browser scrolls the parent to "bring the focused input into view",
+  // which manifests as the background snapping back to the top.
   useEffect(() => {
     if (autofilled && timeRef.current) {
-      const t = setTimeout(() => timeRef.current?.focus(), 350);
+      const t = setTimeout(
+        () => timeRef.current?.focus({ preventScroll: true }),
+        350,
+      );
       return () => clearTimeout(t);
     }
   }, [autofilled]);
