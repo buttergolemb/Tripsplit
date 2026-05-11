@@ -595,7 +595,7 @@ export default function MoneyScreen() {
         {showExpenseModal && (
           <AddExpenseSheet
             onClose={() => setShowExpenseModal(false)}
-            participants={participantNames}
+            participants={trip.participants.map((p) => p.name)}
             onSaved={handleExpenseSaved}
             tripId={trip.id}
           />
