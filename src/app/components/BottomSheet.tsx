@@ -44,7 +44,14 @@ export function BottomSheet({
   const maxHClass = deviceFrame ? "max-h-[88%]" : "max-h-[88vh]";
 
   return (
-    <Drawer.Root open={open} onOpenChange={onOpenChange} container={deviceFrame ?? undefined}>
+    <Drawer.Root
+      open={open}
+      onOpenChange={onOpenChange}
+      container={deviceFrame ?? undefined}
+      // Keep the background visually stable behind trays. The default scaling
+      // treatment can read as a "refresh/jump" in this prototype shell.
+      shouldScaleBackground={false}
+    >
       <Drawer.Portal>
         <Drawer.Overlay className="fixed inset-0 bg-black/40 z-40" />
         <Drawer.Content
