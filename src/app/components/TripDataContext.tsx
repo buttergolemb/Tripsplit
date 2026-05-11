@@ -482,7 +482,6 @@ export function TripDataProvider({ tripId, children }: { tripId: string; childre
       if (context?.previous) qc.setQueryData(qk.trip(tripId), context.previous);
       toastError("add day", err);
     },
-    onSettled: invalidateTrip,
   });
   const addEventMut = useMutation({
     mutationFn: (input: Parameters<typeof timelineApi.addEvent>[1]) => timelineApi.addEvent(tripId, input),
@@ -519,7 +518,6 @@ export function TripDataProvider({ tripId, children }: { tripId: string; childre
       if (context?.previous) qc.setQueryData(qk.trip(tripId), context.previous);
       toastError("add event", err);
     },
-    onSettled: invalidateTrip,
   });
   const updateEventMut = useMutation({
     mutationFn: (input: { eventId: string; patch: Parameters<typeof timelineApi.updateEvent>[2] }) =>
@@ -554,7 +552,6 @@ export function TripDataProvider({ tripId, children }: { tripId: string; childre
       if (context?.previous) qc.setQueryData(qk.trip(tripId), context.previous);
       toastError("update event", err);
     },
-    onSettled: invalidateTrip,
   });
   const removeEventMut = useMutation({
     mutationFn: (eventId: string) => timelineApi.removeEvent(tripId, eventId),
@@ -577,7 +574,6 @@ export function TripDataProvider({ tripId, children }: { tripId: string; childre
       if (context?.previous) qc.setQueryData(qk.trip(tripId), context.previous);
       toastError("remove event", err);
     },
-    onSettled: invalidateTrip,
   });
   const voteMut = useMutation({
     mutationFn: (input: { eventId: string; type: "for" | "against" }) =>
@@ -606,7 +602,6 @@ export function TripDataProvider({ tripId, children }: { tripId: string; childre
       if (context?.previous) qc.setQueryData(qk.trip(tripId), context.previous);
       toastError("record vote", err);
     },
-    onSettled: invalidateTrip,
   });
   const attendanceMut = useMutation({
     mutationFn: (input: { eventId: string; memberId: string; status: "going" | "maybe" | "declined" }) =>
@@ -644,7 +639,6 @@ export function TripDataProvider({ tripId, children }: { tripId: string; childre
       if (context?.previous) qc.setQueryData(qk.trip(tripId), context.previous);
       toastError("update RSVP", err);
     },
-    onSettled: invalidateTrip,
   });
 
   const updateTripMut = useMutation({

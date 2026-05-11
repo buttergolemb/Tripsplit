@@ -120,6 +120,15 @@ export default function Timeline() {
   const [suggestionTrayOpen, setSuggestionTrayOpen] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<Suggestion | null>(null);
 
+  // Keep the selected day stable across data updates; only reset when the
+  // currently selected day truly no longer exists.
+  React.useEffect(() => {
+    if (days.length === 0) return;
+    if (!days.some((d) => d.dayNumber === selectedDayNum)) {
+      setSelectedDayNum(days[0].dayNumber);
+    }
+  }, [days, selectedDayNum]);
+
   const activeDay = days.find(d => d.dayNumber === selectedDayNum) || days[0];
 
   const handleEventClick = (event: Event) => setSelectedEvent(event);
@@ -372,16 +381,8 @@ export default function Timeline() {
 
       {/* Main Content */}
       <main className="px-4 pt-4 space-y-5">
-        <AnimatePresence mode="wait">
-          {activeDay ? (
-            <motion.div
-              key={selectedDayNum}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.2 }}
-              className="space-y-4"
-            >
+        {activeDay ? (
+          <div className="space-y-4">
               {/* Suggestions */}
               {activeDay.suggestions && activeDay.suggestions.length > 0 && (
                 <SuggestionsPanel
@@ -467,9 +468,8 @@ export default function Timeline() {
                   </div>
                 </motion.div>
               )}
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
+          </div>
+        ) : null}
       </main>
 
       {/* Floating Add Button */}
